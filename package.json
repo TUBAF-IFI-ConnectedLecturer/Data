@@ -24,5 +24,8 @@
   "dependencies": {
     "3d-force-graph": "^1.78.4",
     "three": "^0.178.0"
+  },
+  "alias": {
+    "three/webgpu": "./node_modules/three/build/three.webgpu.js"
   }
 }

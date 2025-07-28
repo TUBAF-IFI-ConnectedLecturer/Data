@@ -1,3 +1,7 @@
+//import ForceGraph3D from '3d-force-graph'
+//import * as THREE from 'three'
+import { VRButton } from '../node_modules/three/examples/jsm/webxr/VRButton.js'
+
 const elem = document.getElementById('graph')
 let database = null
 let Graph = null
@@ -134,6 +138,13 @@ fetch('db.json')
       )
       .onNodeHover(showNodeInfo)
       .onNodeRightClick(showNodeInfo)
+
+    // 1️⃣  Grab the underlying Three.js renderer and enable XR
+    const renderer = Graph.renderer()
+    renderer.xr.enabled = true
+
+    // 2️⃣  Append the “Enter VR” button to the page
+    document.body.appendChild(VRButton.createButton(renderer))
   })
   .catch((err) => {
     console.warn(err)
