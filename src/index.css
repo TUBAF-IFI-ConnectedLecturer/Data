@@ -1,0 +1,25 @@
+body {
+  margin: 0;
+  font-family: Arial;
+}
+
+h1 {
+  font-size: 1.8em;
+  margin: unset;
+}
+
+#information {
+  position: absolute;
+  top: 0.5rem;
+  left: 1rem;
+  z-index: 1000;
+  color: white;
+}
+
+#search {
+  position: absolute;
+  bottom: 0.5rem;
+  left: 1rem;
+  z-index: 1000;
+  color: white;
+}

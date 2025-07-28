@@ -1,300 +1,124 @@
-<head>
-  <style>
-    body {
-      margin: 0;
-      font-family: Arial;
-    }
+<html>
+  <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-    h1 {
-      font-size: 1.8em;
-      margin: unset;
-    }
+    <link rel="stylesheet" href="index.css" />
 
-    #information {
-      position: absolute;
-      top: 0.5rem;
-      left: 1rem;
-      z-index: 1000;
-      color: white;
-    }
+    <script src="//cdn.jsdelivr.net/npm/3d-force-graph"></script>
+  </head>
 
-    #search {
-      position: absolute;
-      bottom: 0.5rem;
-      left: 1rem;
-      z-index: 1000;
-      color: white;
-    }
-  </style>
+  <body>
+    <div id="3d-graph"></div>
 
-  <script src="//cdn.jsdelivr.net/npm/3d-force-graph"></script>
-</head>
+    <div id="information">
+      <h1>OER Schlüsselwortsuche</h1>
+      <span id="nodes">0</span> Knoten, <span id="edges">0</span> Kanten
+    </div>
 
-<body>
-  <div id="3d-graph"></div>
-
-  <div id="information">
-    <h1>OER Schlüsselwortsuche</h1>
-    <span id="nodes">0</span> Knoten, <span id="edges">0</span> Kanten
-  </div>
-
-  <div id="search">
-    <input id="search-input" type="text" />
-  </div>
-
-  <div
-    id="info-panel-container"
-    style="
-      position: absolute;
-      right: 1rem;
-      bottom: 0.5rem;
-      display: flex;
-      flex-direction: column-reverse;
-      align-items: flex-end;
-      z-index: 1500;
-      gap: 0.7em;
-    "
-  >
-    <details
-      id="beschreibung-panel"
-      style="
-        background: rgba(30, 30, 30, 0.5);
-        color: white;
-        padding: 1em 1.5em;
-        border-radius: 8px;
-        width: 280px;
-        box-shadow: 0 2px 8px #0008;
-      "
-    >
-      <summary
-        style="
-          cursor: pointer;
-          font-size: 1.1em;
-          display: flex;
-          align-items: center;
-          gap: 0.5em;
-        "
-      >
-        <svg
-          stroke="currentColor"
-          fill="currentColor"
-          stroke-width="0"
-          viewBox="0 0 16 16"
-          height="1em"
-          width="1em"
-          xmlns="http://www.w3.org/2000/svg"
-        >
-          <path
-            d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14m0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16"
-          ></path>
-          <path
-            d="m8.93 6.588-2.29.287-.082.38.45.083c.294.07.352.176.288.469l-.738 3.468c-.194.897.105 1.319.808 1.319.545 0 1.178-.252 1.465-.598l.088-.416c-.2.176-.492.246-.686.246-.275 0-.375-.193-.304-.533zM9 4.5a1 1 0 1 1-2 0 1 1 0 0 1 2 0"
-          ></path>
-        </svg>
-        Beschreibung
-      </summary>
-      <div style="margin-top: 0.7em">
-        <p>
-          Diese Karte zeigt das <i>Netzwerk</i> aller OER-Inhalte des
-          sächsischen OPAL-Systems. Jeder <i>Knoten</i> stellt einen OER-Inhalt
-          dar und jede Kante eine Ähnlichkeitsbeziehung zwischen den Beiträgen.
-        </p>
-      </div>
-    </details>
+    <div id="search">
+      <input id="search-input" type="text" />
+    </div>
 
     <div
-      id="node-info"
+      id="info-panel-container"
       style="
-        display: none;
-        background: rgba(30, 30, 30, 0.5);
-        color: white;
-        padding: 1em 1.5em;
-        border-radius: 8px;
-        width: 280px;
-        z-index: 2000;
-        max-height: 40vh;
-        box-shadow: 0 2px 8px #0008;
-        max-width: 300px;
-        overflow: scroll;
+        position: absolute;
+        right: 1rem;
+        bottom: 0.5rem;
+        display: flex;
+        flex-direction: column-reverse;
+        align-items: flex-end;
+        z-index: 1500;
+        gap: 0.7em;
       "
     >
-      <button
-        id="close-node-info"
+      <details
+        id="beschreibung-panel"
         style="
-          position: absolute;
-          top: 0.5em;
-          right: 0.5em;
-          background: transparent;
-          border: none;
-          color: #fff;
-          font-size: 1.2em;
-          cursor: pointer;
-          z-index: 10;
+          background: rgba(30, 30, 30, 0.5);
+          color: white;
+          padding: 1em 1.5em;
+          border-radius: 8px;
+          width: 280px;
+          box-shadow: 0 2px 8px #0008;
         "
-        aria-label="Schließen"
-        title="Schließen"
       >
-        &times;
-      </button>
+        <summary
+          style="
+            cursor: pointer;
+            font-size: 1.1em;
+            display: flex;
+            align-items: center;
+            gap: 0.5em;
+          "
+        >
+          <svg
+            stroke="currentColor"
+            fill="currentColor"
+            stroke-width="0"
+            viewBox="0 0 16 16"
+            height="1em"
+            width="1em"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14m0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16"
+            ></path>
+            <path
+              d="m8.93 6.588-2.29.287-.082.38.45.083c.294.07.352.176.288.469l-.738 3.468c-.194.897.105 1.319.808 1.319.545 0 1.178-.252 1.465-.598l.088-.416c-.2.176-.492.246-.686.246-.275 0-.375-.193-.304-.533zM9 4.5a1 1 0 1 1-2 0 1 1 0 0 1 2 0"
+            ></path>
+          </svg>
+          Beschreibung
+        </summary>
+        <div style="margin-top: 0.7em">
+          <p>
+            Diese Karte zeigt das <i>Netzwerk</i> aller OER-Inhalte des
+            sächsischen OPAL-Systems. Jeder <i>Knoten</i> stellt einen
+            OER-Inhalt dar und jede Kante eine Ähnlichkeitsbeziehung zwischen
+            den Beiträgen.
+          </p>
+        </div>
+      </details>
 
-      <div id="node-info-text"></div>
+      <div
+        id="node-info"
+        style="
+          display: none;
+          background: rgba(30, 30, 30, 0.5);
+          color: white;
+          padding: 1em 1.5em;
+          border-radius: 8px;
+          width: 280px;
+          z-index: 2000;
+          max-height: 40vh;
+          box-shadow: 0 2px 8px #0008;
+          max-width: 300px;
+          overflow: scroll;
+        "
+      >
+        <button
+          id="close-node-info"
+          style="
+            position: absolute;
+            top: 0.5em;
+            right: 0.5em;
+            background: transparent;
+            border: none;
+            color: #fff;
+            font-size: 1.2em;
+            cursor: pointer;
+            z-index: 10;
+          "
+          aria-label="Schließen"
+          title="Schließen"
+        >
+          &times;
+        </button>
+
+        <div id="node-info-text"></div>
+      </div>
     </div>
-  </div>
 
-  <script>
-    function resetNodePositions(nodes) {
-      return nodes.map(({ x, y, z, vx, vy, vz, fx, fy, fz, ...rest }) => ({
-        ...rest,
-        x: undefined,
-        y: undefined,
-        z: undefined,
-        vx: undefined,
-        vy: undefined,
-        vz: undefined,
-        fx: undefined,
-        fy: undefined,
-        fz: undefined,
-      }))
-    }
-
-    function showNodeInfo(node) {
-      const infoDiv = document.getElementById('node-info-text')
-
-      if (!node) {
-        return
-      }
-
-      let affiliation = ''
-      let file = ''
-
-      if (node.affiliation) {
-        affiliation = `<i style="display: block; margin-top: 0.5rem">(${node.affiliation})</i>`
-      }
-
-      if (node.file) {
-        file = '<br>Typ: ' + node.file
-      }
-
-      infoDiv.parentElement.style.display = 'block'
-      infoDiv.innerHTML = `
-        <strong>${node.title}</strong>
-        ${affiliation}
-        <ul>
-          ${(node.tag || []).map((tag) => `<li>${tag}</li>`).join('')}
-        </ul>
-        <a href="https://bildungsportal.sachsen.de/opal/oer/${
-          node.id
-        }" target="_blank" style="color:#6cf;text-decoration:underline; margin-bottom: 0.5rem">
-          Zum OER-Eintrag
-        </a>
-        ${file}
-      `
-    }
-
-    function includes(base, term) {
-      base = base.toLowerCase()
-      term = term.toLowerCase().split(' ')
-
-      for (t of term) {
-        if (!base.includes(t)) return false
-      }
-
-      return true
-    }
-
-    function handleSearch(e) {
-      const term = e.target.value.toLowerCase()
-      if (!database || !Graph) return
-
-      if (!term) {
-        Graph.graphData(database).d3ReheatSimulation()
-        updateCounters(database)
-        return
-      }
-
-      // find all matching node IDs
-      const termIds = new Set(
-        database.nodes
-          .filter((n) => {
-            return includes(
-              n.title + ' ' + n.affiliation + ' ' + n.file + n.tag.join(' '),
-              term
-            )
-          })
-          .map((n) => n.id)
-      )
-
-      // filter links by any endpoint matching, **then** re-map to id-only links
-      const links = database.links
-        .filter((l) => termIds.has(l.source.id) || termIds.has(l.target.id))
-        .map((l) => ({
-          source: l.source.id,
-          target: l.target.id,
-        }))
-
-      // rebuild nodes (clearing positions so they re-pack)
-      const nodes = resetNodePositions(
-        database.nodes.filter(
-          (n) =>
-            termIds.has(n.id) ||
-            links.some((l) => l.source === n.id || l.target === n.id)
-        )
-      )
-
-      // hand the cleaned data back to the graph
-      Graph.graphData({ nodes, links })
-        .cooldownTicks(100)
-        .d3ReheatSimulation()
-        .zoomToFit(600, 40)
-
-      updateCounters({ nodes, links })
-    }
-
-    function updateCounters(graph) {
-      document.getElementById('nodes').innerText = graph.nodes.length
-      document.getElementById('edges').innerText = graph.links.length
-    }
-
-    const elem = document.getElementById('3d-graph')
-    let database = null
-    let Graph = null
-
-    fetch('db.json')
-      .then((response) => response.json())
-      .then((json) => {
-        database = json
-        updateCounters(database)
-        Graph = new ForceGraph3D(elem)
-          .graphData(database)
-          .nodeAutoColorBy((node) => node.tag[0])
-          .nodeLabel((node) => `${node.title}`)
-          .onNodeClick((node) =>
-            window.open(
-              `https://bildungsportal.sachsen.de/opal/oer/${node.id}`,
-              '_blank'
-            )
-          )
-          .onNodeHover(showNodeInfo)
-          .onNodeRightClick(showNodeInfo)
-      })
-      .catch((err) => {
-        console.warn(err)
-      })
-
-    const debounce = (fn, ms = 200) => {
-      let t
-      return (...args) => {
-        clearTimeout(t)
-        t = setTimeout(() => fn(...args), ms)
-      }
-    }
-
-    document
-      .getElementById('search-input')
-      .addEventListener('input', debounce(handleSearch, 250))
-
-    document.getElementById('close-node-info').onclick = function () {
-      document.getElementById('node-info').style.display = 'none'
-    }
-  </script>
-</body>
+    <script src="index.ts"></script>
+  </body>
+</html>
