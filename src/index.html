@@ -1,123 +1,31 @@
-<html>
+<!DOCTYPE html>
+<html lang="en">
   <head>
+    <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Edu-Galaxy</title>
 
-    <link rel="stylesheet" href="index.css" />
-    <script src="../node_modules/3d-force-graph/dist/3d-force-graph.min.js"></script>
-  </head>
-
-  <body>
-    <div id="graph"></div>
-
-    <div id="information">
-      <h1>OER Schlüsselwortsuche</h1>
-      <span id="nodes">0</span> Knoten, <span id="edges">0</span> Kanten
-    </div>
-
-    <div id="search">
-      <input id="search-input" type="text" />
-    </div>
-
-    <div
-      id="info-panel-container"
-      style="
-        position: absolute;
-        right: 1rem;
-        bottom: 0.5rem;
-        display: flex;
-        flex-direction: column-reverse;
-        align-items: flex-end;
-        z-index: 1500;
-        gap: 0.7em;
-      "
-    >
-      <details
-        id="beschreibung-panel"
-        style="
-          background: rgba(30, 30, 30, 0.5);
-          color: white;
-          padding: 1em 1.5em;
-          border-radius: 8px;
-          width: 280px;
-          box-shadow: 0 2px 8px #0008;
-        "
-      >
-        <summary
-          style="
-            cursor: pointer;
-            font-size: 1.1em;
-            display: flex;
-            align-items: center;
-            gap: 0.5em;
-          "
-        >
-          <svg
-            stroke="currentColor"
-            fill="currentColor"
-            stroke-width="0"
-            viewBox="0 0 16 16"
-            height="1em"
-            width="1em"
-            xmlns="http://www.w3.org/2000/svg"
-          >
-            <path
-              d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14m0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16"
-            ></path>
-            <path
-              d="m8.93 6.588-2.29.287-.082.38.45.083c.294.07.352.176.288.469l-.738 3.468c-.194.897.105 1.319.808 1.319.545 0 1.178-.252 1.465-.598l.088-.416c-.2.176-.492.246-.686.246-.275 0-.375-.193-.304-.533zM9 4.5a1 1 0 1 1-2 0 1 1 0 0 1 2 0"
-            ></path>
-          </svg>
-          Beschreibung
-        </summary>
-        <div style="margin-top: 0.7em">
-          <p>
-            Diese Karte zeigt das <i>Netzwerk</i> aller OER-Inhalte des
-            sächsischen OPAL-Systems. Jeder <i>Knoten</i> stellt einen
-            OER-Inhalt dar und jede Kante eine Ähnlichkeitsbeziehung zwischen
-            den Beiträgen.
-          </p>
-        </div>
-      </details>
-
-      <div
-        id="node-info"
-        style="
-          display: none;
-          background: rgba(30, 30, 30, 0.5);
-          color: white;
-          padding: 1em 1.5em;
-          border-radius: 8px;
-          width: 280px;
-          z-index: 2000;
-          max-height: 40vh;
-          box-shadow: 0 2px 8px #0008;
-          max-width: 300px;
-          overflow: scroll;
-        "
-      >
-        <button
-          id="close-node-info"
-          style="
-            position: absolute;
-            top: 0.5em;
-            right: 0.5em;
-            background: transparent;
-            border: none;
-            color: #fff;
-            font-size: 1.2em;
-            cursor: pointer;
-            z-index: 10;
-          "
-          aria-label="Schließen"
-          title="Schließen"
-        >
-          &times;
-        </button>
-
-        <div id="node-info-text"></div>
-      </div>
-    </div>
-
+    <script src="npm:3d-force-graph/dist/3d-force-graph.min.js"></script>
     <script type="module" src="index.ts"></script>
-  </body>
+
+    <link rel="stylesheet" href="npm:vuetify/dist/vuetify.min.css" />
+    <link rel="stylesheet" href="npm:@mdi/font/css/materialdesignicons.css" />
+    <style>
+      html,
+      body {
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        padding: 0;
+        overflow-y: auto;
+        overscroll-behavior-y: none;
+      }
+
+      body {
+        position: relative;
+        touch-action: manipulation;
+      }
+    </style>
+  </head>
+  <body></body>
 </html>
