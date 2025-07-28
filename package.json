@@ -2,7 +2,7 @@
   "name": "connected-lectures",
   "scripts": {
     "watch": "npx parcel serve src/index.html --open",
-    "build": "npx parcel build src/index.html --dist-dir docs"
+    "build": "npx parcel build src/index.html --dist-dir docs --public-url ."
   },
   "browserslist": {
     "production": [
