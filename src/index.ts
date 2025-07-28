@@ -69,36 +69,40 @@ function includes(base: string, term: string) {
 }
 
 function handleSearch(e) {
-  const term = e.target.value.toLowerCase()
+  const termRaw = e.target.value
+  const term = termRaw.trim().toLowerCase()
   if (!database || !Graph) return
 
-  if (!term) {
+  // 1️⃣  Show the entire graph **only** when the search term is exactly '*'
+  if (term === '*') {
     Graph.graphData(database).d3ReheatSimulation()
     updateCounters(database)
     return
   }
 
-  // find all matching node IDs
+  // 2️⃣  Hide the graph completely when the search field is empty
+  if (!term) {
+    Graph.graphData({ nodes: [], links: [] })
+    updateCounters({ nodes: [], links: [] })
+    return
+  }
+
+  // 3️⃣  Otherwise, run the regular filtered search
   const termIds = new Set(
     database.nodes
-      .filter((n) => {
-        return includes(
-          n.title + ' ' + n.affiliation + ' ' + n.file + n.tag.join(' '),
+      .filter((n) =>
+        includes(
+          `${n.title} ${n.affiliation} ${n.file} ${n.tag.join(' ')}`,
           term
         )
-      })
+      )
       .map((n) => n.id)
   )
 
-  // filter links by any endpoint matching, **then** re-map to id-only links
   const links = database.links
     .filter((l) => termIds.has(l.source.id) || termIds.has(l.target.id))
-    .map((l) => ({
-      source: l.source.id,
-      target: l.target.id,
-    }))
+    .map((l) => ({ source: l.source.id, target: l.target.id }))
 
-  // rebuild nodes (clearing positions so they re-pack)
   const nodes = resetNodePositions(
     database.nodes.filter(
       (n) =>
@@ -107,7 +111,6 @@ function handleSearch(e) {
     )
   )
 
-  // hand the cleaned data back to the graph
   Graph.graphData({ nodes, links })
     .cooldownTicks(100)
     .d3ReheatSimulation()
@@ -125,9 +128,12 @@ fetch('db.json')
   .then((response) => response.json())
   .then((json) => {
     database = json
-    updateCounters(database)
+
+    // Start with an **empty** graph until the user types '*'
+    updateCounters({ nodes: [], links: [] })
+
     Graph = new ForceGraph3D(elem)
-      .graphData(database)
+      .graphData({ nodes: [], links: [] })
       .nodeAutoColorBy((node) => node.tag[0])
       .nodeLabel((node) => `${node.title}`)
       .onNodeClick((node) =>
@@ -139,16 +145,12 @@ fetch('db.json')
       .onNodeHover(showNodeInfo)
       .onNodeRightClick(showNodeInfo)
 
-    // 1️⃣  Grab the underlying Three.js renderer and enable XR
+    // Enable WebXR
     const renderer = Graph.renderer()
     renderer.xr.enabled = true
-
-    // 2️⃣  Append the “Enter VR” button to the page
     document.body.appendChild(VRButton.createButton(renderer))
   })
-  .catch((err) => {
-    console.warn(err)
-  })
+  .catch((err) => console.warn(err))
 
 const debounce = (fn, ms = 200) => {
   let t
