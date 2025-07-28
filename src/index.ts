@@ -1,3 +1,7 @@
+const elem = document.getElementById('graph')
+let database = null
+let Graph = null
+
 function resetNodePositions(nodes) {
   return nodes.map(({ x, y, z, vx, vy, vz, fx, fy, fz, ...rest }) => ({
     ...rest,
@@ -33,7 +37,7 @@ function showNodeInfo(node) {
 
   if (!infoDiv) return
 
-  infoDiv.parentElement.style.display = 'block'
+  infoDiv?.parentElement?.style.setProperty('display', 'block')
   infoDiv.innerHTML = `
         <strong>${node.title}</strong>
         ${affiliation}
@@ -109,13 +113,9 @@ function handleSearch(e) {
 }
 
 function updateCounters(graph) {
-  document.getElementById('nodes').innerText = graph.nodes.length
-  document.getElementById('edges').innerText = graph.links.length
+  document.getElementById('nodes')!.innerText = graph.nodes.length
+  document.getElementById('edges')!.innerText = graph.links.length
 }
-
-const elem = document.getElementById('3d-graph')
-let database = null
-let Graph = null
 
 fetch('db.json')
   .then((response) => response.json())
@@ -151,6 +151,6 @@ document
   .getElementById('search-input')
   ?.addEventListener('input', debounce(handleSearch, 250))
 
-document.getElementById('close-node-info').onclick = function () {
-  document.getElementById('node-info').style.display = 'none'
+document.getElementById('close-node-info')!.onclick = function () {
+  document.getElementById('node-info')?.style.setProperty('display', 'none')
 }

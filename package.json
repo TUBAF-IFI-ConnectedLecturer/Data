@@ -20,5 +20,9 @@
     "@parcel/transformer-sass": "^2.15.4",
     "parcel": "^2.15.4",
     "parcel-reporter-static-files-copy": "^1.5.3"
+  },
+  "dependencies": {
+    "3d-force-graph": "^1.78.4",
+    "three": "^0.178.0"
   }
 }
