@@ -117,7 +117,7 @@ export default {
       }
 
       // 3️⃣  Otherwise, run the regular filtered search
-      const termIds = new Set(
+      const nodeIds = new Set(
         database.nodes
           .filter((n) =>
             includes(
@@ -130,38 +130,26 @@ export default {
           .map((n) => n.id)
       );
 
-      const links = database.links
-        .filter(
-          (l) =>
-            termIds.has(l.source.id) ||
-            termIds.has(l.target.id) ||
-            termIds.has(l.source) ||
-            termIds.has(l.target)
-        )
-        .map((l) => ({
-          source: l.source.id || l.source,
-          target: l.target.id || l.target,
-        }));
+      const links = [];
+      for (const { source, target } of database.links) {
+        // normalise to plain ids just once
+        const sId = typeof source === "object" ? source.id : source;
+        const tId = typeof target === "object" ? target.id : target;
 
-      const nodes = resetNodePositions(
-        database.nodes.filter(
-          (n) =>
-            termIds.has(n.id) ||
-            links.some(
-              (l) =>
-                l.source === n.id ||
-                l.target === n.id ||
-                l.source.id === n.id ||
-                l.target.id === n.id
-            )
-        )
-      );
+        // keep the link only if either endpoint matches
+        if (nodeIds.has(sId) && nodeIds.has(tId)) {
+          links.push({ source: sId, target: tId });
+        }
+      }
+
+      const nodes = resetNodePositions(database.nodes.filter((n) => nodeIds.has(n.id)));
 
       Graph.graphData({ nodes, links })
         .cooldownTicks(100)
         .d3ReheatSimulation()
         .zoomToFit(600, 40);
       Graph.resumeAnimation();
+
       this.updateCounters({ nodes, links });
       this.search.loading = false;
     },
@@ -180,7 +168,7 @@ export default {
             .graphData({ nodes: [], links: [] })
             .nodeAutoColorBy((node) => node.tag[0])
             .nodeLabel((node) => `${node.title}`)
-            .onNodeClick((node) => this.load(node.id))
+            .onNodeRightClick((node) => this.load(node.id))
             .onNodeHover(this.handleHover)
             .nodeThreeObject((node) => {
               if (this.settings.title) {
@@ -193,15 +181,17 @@ export default {
                 return sprite;
               }
             })
-            .nodeThreeObjectExtend(true);
-          //.onNodeRightClick(showNodeInfo);
+            .nodeThreeObjectExtend(true)
+            .onNodeClick((node) => {
+              this.loadConnections(node.id);
+            });
 
           // Enable WebXR
           const renderer = Graph.renderer();
           renderer.xr.enabled = true;
 
           Graph.pauseAnimation();
-          Graph.d3Force("charge").strength(-500);
+          //Graph.d3Force("charge").strength(-500);
 
           const params = new URLSearchParams(window.location.search);
           const initialSearch = params.get("search");
@@ -241,15 +231,50 @@ export default {
       window.open(`https://bildungsportal.sachsen.de/opal/oer/${id}`, "_blank");
     },
 
+    loadConnections(id: string) {
+      /* ---------- helpers & cached look‑ups ---------- */
+      const live = Graph.graphData(); // current graph
+      const dbNode = new Map(database.nodes.map((n) => [n.id, n])); // O(1) lookup
+
+      const keepIds = new Set(live.nodes.map((n) => n.id)); // nodes we already show
+      const newLinks = live.links.map((link) => {
+        return { source: link.source.id, target: link.target.id };
+      }); // fresh array copy
+
+      /* ---------- scan the full link table once ---------- */
+      for (const { source, target } of database.links) {
+        const sId = typeof source === "object" ? source.id : source;
+        const tId = typeof target === "object" ? target.id : target;
+
+        // only links that touch the clicked id *and* whose endpoints both exist
+        if ((sId === id || tId === id) && dbNode.has(sId) && dbNode.has(tId)) {
+          newLinks.push({ source: sId, target: tId });
+          keepIds.add(sId).add(tId); // Set.add is chain‑able
+        }
+      }
+
+      /* ---------- build the matching node list ---------- */
+      const newNodes = resetNodePositions(Array.from(keepIds, (id) => dbNode.get(id)));
+
+      /* ---------- update the graph ---------- */
+
+      Graph.graphData({ nodes: newNodes, links: newLinks }); //.d3ReheatSimulation(); // optional: settle layout again
+
+      this.updateCounters({ nodes: newNodes, links: newLinks });
+    },
+
     toggleTitle() {
+      Graph.pauseAnimation();
       this.settings.title = !this.settings.title;
 
       if (this.settings.title) {
         Graph.d3Force("charge").strength(-500);
       } else {
-        Graph.d3Force("charge").strength(100);
+        Graph.d3Force("charge").strength(-50);
       }
       Graph.refresh();
+      Graph.resumeAnimation();
+      Graph.d3ReheatSimulation();
     },
   },
 
