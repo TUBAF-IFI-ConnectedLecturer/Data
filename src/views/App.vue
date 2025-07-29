@@ -1,7 +1,11 @@
 <script lang="ts">
 import { VRButton } from "../../node_modules/three/examples/jsm/webxr/VRButton.js";
 //import ForceGraph3D from "3d-force-graph";
-import SpriteText from "three-spritetext";
+import { includes, resetNodePositions, stringToColor } from "../utils";
+import {
+  CSS2DRenderer,
+  CSS2DObject,
+} from "../../node_modules/three/examples/jsm/renderers/CSS2DRenderer.js";
 
 var Graph: any = null;
 
@@ -25,32 +29,6 @@ var database: { nodes: Node[]; links: Link[] } = {
   nodes: [],
   links: [],
 };
-
-function resetNodePositions(nodes) {
-  return nodes.map(({ x, y, z, vx, vy, vz, fx, fy, fz, ...rest }) => ({
-    ...rest,
-    x: undefined,
-    y: undefined,
-    z: undefined,
-    vx: undefined,
-    vy: undefined,
-    vz: undefined,
-    fx: undefined,
-    fy: undefined,
-    fz: undefined,
-  }));
-}
-
-function includes(base: string, term: string) {
-  base = base.toLowerCase();
-  let terms = term.toLowerCase().split(" ");
-
-  for (let t of terms) {
-    if (!base.includes(t)) return false;
-  }
-
-  return true;
-}
 
 export default {
   name: "App",
@@ -164,27 +142,29 @@ export default {
 
           this.updateCounters({ nodes: [], links: [] });
 
-          Graph = new ForceGraph3D(this.$refs.graph)
+          Graph = new ForceGraph3D(this.$refs.graph, {
+            extraRenderers: [new CSS2DRenderer()],
+          })
             .graphData({ nodes: [], links: [] })
-            .nodeAutoColorBy((node) => node.tag[0])
-            .nodeLabel((node) => `${node.title}`)
+            .nodeColor((node) => stringToColor(node.tag[0]))
+
             .onNodeRightClick((node) => this.load(node.id))
             .onNodeHover(this.handleHover)
             .nodeThreeObject((node) => {
               if (this.settings.title) {
-                const sprite = new SpriteText(node.title);
-
-                sprite.material.depthWrite = false; // make sprite background transparent
-                //sprite.color = node.tag[0];
-                sprite.textHeight = 8;
-                sprite.center.y = -0.6; // shift above node
-                return sprite;
+                const nodeEl = document.createElement("span");
+                nodeEl.textContent =
+                  node.title.length <= 25 ? node.title : node.title.slice(0, 25) + "...";
+                nodeEl.style.color = stringToColor(node.tag[0]);
+                nodeEl.className = "node-label";
+                return new CSS2DObject(nodeEl);
               }
             })
             .nodeThreeObjectExtend(true)
             .onNodeClick((node) => {
               this.loadConnections(node.id);
-            });
+            })
+            .nodeLabel((node) => `${node.title}`);
 
           // Enable WebXR
           const renderer = Graph.renderer();
@@ -268,9 +248,9 @@ export default {
       this.settings.title = !this.settings.title;
 
       if (this.settings.title) {
-        Graph.d3Force("charge").strength(-500);
+        //Graph.d3Force("charge").strength(-500);
       } else {
-        Graph.d3Force("charge").strength(-50);
+        //Graph.d3Force("charge").strength(-50);
       }
       Graph.refresh();
       Graph.resumeAnimation();
@@ -432,5 +412,13 @@ ul {
   left: 1rem;
   z-index: 1000;
   color: white;
+}
+
+.node-label {
+  font-size: 12px;
+  padding: 1px 4px;
+  border-radius: 4px;
+  background-color: rgba(0, 0, 0, 0.5);
+  user-select: none;
 }
 </style>
