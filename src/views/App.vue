@@ -1,9 +1,10 @@
 <script lang="ts">
 import { VRButton } from "../../node_modules/three/examples/jsm/webxr/VRButton.js";
+import ForceGraph3D from "3d-force-graph";
 
 var Graph: any = null;
 
-type NodeType = {
+type Node = {
   id: string;
   title: string;
   type: string;
@@ -14,12 +15,12 @@ type NodeType = {
   tag: string[];
 };
 
-type LinkType = {
-  source: string;
-  target: string;
+type Link = {
+  source: string | Node;
+  target: string | Node;
 };
 
-var database: { nodes: NodeType[]; links: LinkType[] } = {
+var database: { nodes: Node[]; links: Link[] } = {
   nodes: [],
   links: [],
 };
@@ -60,7 +61,14 @@ export default {
         loading: false,
       },
 
-      open: { description: false },
+      open: {
+        description: false,
+      },
+
+      article: {
+        show: false,
+        content: null,
+      },
 
       resizeObserver: new ResizeObserver(() => {
         this.handleResize();
@@ -105,13 +113,29 @@ export default {
       );
 
       const links = database.links
-        .filter((l) => termIds.has(l.source.id) || termIds.has(l.target.id))
-        .map((l) => ({ source: l.source.id, target: l.target.id }));
+        .filter(
+          (l) =>
+            termIds.has(l.source.id) ||
+            termIds.has(l.target.id) ||
+            termIds.has(l.source) ||
+            termIds.has(l.target)
+        )
+        .map((l) => ({
+          source: l.source.id || l.source,
+          target: l.target.id || l.target,
+        }));
 
       const nodes = resetNodePositions(
         database.nodes.filter(
           (n) =>
-            termIds.has(n.id) || links.some((l) => l.source === n.id || l.target === n.id)
+            termIds.has(n.id) ||
+            links.some(
+              (l) =>
+                l.source === n.id ||
+                l.target === n.id ||
+                l.source.id === n.id ||
+                l.target.id === n.id
+            )
         )
       );
 
@@ -131,10 +155,10 @@ export default {
       fetch("db.json")
         .then((response) => response.json())
         .then((json) => {
-          database = json;
-
           // Start with an **empty** graph until the user types '*'
           //updateCounters({ nodes: [], links: [] });
+
+          database = json;
 
           Graph = new ForceGraph3D(this.$refs.graph)
             .graphData({ nodes: [], links: [] })
@@ -145,14 +169,17 @@ export default {
                 `https://bildungsportal.sachsen.de/opal/oer/${node.id}`,
                 "_blank"
               )
-            );
-          //.onNodeHover(showNodeInfo)
+            )
+            .onNodeHover(this.handleHover);
           //.onNodeRightClick(showNodeInfo);
+
+          //this.handleSearch();
 
           // Enable WebXR
           const renderer = Graph.renderer();
           renderer.xr.enabled = true;
-          this.$refs.graph.appendChild(VRButton.createButton(renderer));
+
+          //this.$refs.graph.appendChild(VRButton.createButton(renderer));
         })
         .catch((err) => console.warn(err));
 
@@ -162,6 +189,13 @@ export default {
     handleResize() {
       if (!Graph) return;
       Graph.width(this.$refs.graph.clientWidth).height(this.$refs.graph.clientHeight);
+    },
+
+    handleHover(node?: Node) {
+      if (!node) return;
+
+      this.article.content = node;
+      this.article.show = true;
     },
   },
 
@@ -231,11 +265,71 @@ export default {
       </v-card-text>
     </v-card>
   </v-dialog>
+
+  <v-card class="info-card mx-auto" max-width="344" hover v-show="article.show">
+    <v-card-item>
+      <v-card-title>
+        {{ article.content?.title }}
+      </v-card-title>
+
+      <v-card-subtitle>
+        {{ article.content?.authors }}
+
+        <span v-show="article.content?.affiliation">
+          - (<i>
+            {{ article.content?.affiliation }}
+          </i>
+
+          )
+        </span>
+      </v-card-subtitle>
+    </v-card-item>
+
+    <v-card-text>
+      {{ article.content?.summary }}
+    </v-card-text>
+
+    <v-card-actions class="pt-0">
+      <v-btn
+        color="teal-accent-4"
+        text="Close"
+        variant="text"
+        @click="article.show = false"
+      ></v-btn>
+    </v-card-actions>
+  </v-card>
+
+  <!--v-dialog width="auto">
+    <v-card
+      max-width="400"
+      prepend-icon="mdi-information-outline"
+      :title="article.content?.title"
+    >
+      <template v-slot:actions>
+        <v-btn class="ms-auto" text="Ok" @click="article.show = false"></v-btn>
+      </template>
+
+      <v-card-text>
+        Diese Karte zeigt das <i>Netzwerk</i> aller OER-Inhalte des sächsischen
+        OPAL-Systems. Jeder <i>Knoten</i> stellt einen OER-Inhalt dar und jede Kante eine
+        Ähnlichkeitsbeziehung zwischen den Beiträgen.
+      </v-card-text>
+    </v-card>
+  </v-dialog-->
 </template>
 
 <style>
 #graph {
   width: 100%;
   height: 100%;
+}
+
+.info-card {
+  position: absolute !important;
+  z-index: 100;
+  right: 1rem;
+  bottom: 1rem;
+  max-height: 60%;
+  background-color: #7778 !important;
 }
 </style>
