@@ -1,5 +1,5 @@
 <script lang="ts">
-import { VRButton } from "../../node_modules/three/examples/jsm/webxr/VRButton.js";
+//import { VRButton } from "../../node_modules/three/examples/jsm/webxr/VRButton.js";
 //import ForceGraph3D from "3d-force-graph";
 import { includes, resetNodePositions, stringToColor } from "../utils";
 import {

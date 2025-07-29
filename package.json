@@ -27,8 +27,7 @@
   "dependencies": {
     "@mdi/font": "^7.4.47",
     "3d-force-graph": "^1.78.4",
-    "three": "^0.178.0",
-    "three-spritetext": "^1.10.0"
+    "three": "^0.178.0"
   },
   "alias": {
     "three/webgpu": "./node_modules/three/build/three.webgpu.js"
