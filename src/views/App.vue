@@ -1,6 +1,6 @@
 <script lang="ts">
 import { VRButton } from "../../node_modules/three/examples/jsm/webxr/VRButton.js";
-import ForceGraph3D from "3d-force-graph";
+//import ForceGraph3D from "3d-force-graph";
 
 var Graph: any = null;
 
@@ -87,14 +87,14 @@ export default {
       // 1️⃣  Show the entire graph **only** when the search term is exactly '*'
       if (term === "*") {
         Graph.graphData(database).d3ReheatSimulation();
-        //updateCounters(database)
+        this.updateCounters(database);
         return;
       }
 
       // 2️⃣  Hide the graph completely when the search field is empty
       if (!term) {
         Graph.graphData({ nodes: [], links: [] });
-        //updateCounters({ nodes: [], links: [] })
+        this.updateCounters({ nodes: [], links: [] });
         return;
       }
 
@@ -144,7 +144,7 @@ export default {
         .d3ReheatSimulation()
         .zoomToFit(600, 40);
 
-      //updateCounters({ nodes, links })
+      this.updateCounters({ nodes, links });
 
       this.search.loading = false;
     },
@@ -155,21 +155,15 @@ export default {
       fetch("db.json")
         .then((response) => response.json())
         .then((json) => {
-          // Start with an **empty** graph until the user types '*'
-          //updateCounters({ nodes: [], links: [] });
-
           database = json;
+
+          this.updateCounters({ nodes: [], links: [] });
 
           Graph = new ForceGraph3D(this.$refs.graph)
             .graphData({ nodes: [], links: [] })
             .nodeAutoColorBy((node) => node.tag[0])
             .nodeLabel((node) => `${node.title}`)
-            .onNodeClick((node) =>
-              window.open(
-                `https://bildungsportal.sachsen.de/opal/oer/${node.id}`,
-                "_blank"
-              )
-            )
+            .onNodeClick((node) => load(node.id))
             .onNodeHover(this.handleHover);
           //.onNodeRightClick(showNodeInfo);
 
@@ -186,6 +180,11 @@ export default {
       this.resizeObserver.observe(this.$refs.graph);
     },
 
+    updateCounters(graph: { nodes: Node[]; links: Link[] }) {
+      this.$refs.nodes.innerText = graph.nodes.length;
+      this.$refs.links.innerText = graph.links.length;
+    },
+
     handleResize() {
       if (!Graph) return;
       Graph.width(this.$refs.graph.clientWidth).height(this.$refs.graph.clientHeight);
@@ -196,6 +195,10 @@ export default {
 
       this.article.content = node;
       this.article.show = true;
+    },
+
+    load(id: string) {
+      window.open(`https://bildungsportal.sachsen.de/opal/oer/${id}`, "_blank");
     },
   },
 
@@ -216,7 +219,7 @@ export default {
       <v-app-bar density="compact">
         <template v-slot:prepend> </template>
 
-        <v-app-bar-title>OER-Graph</v-app-bar-title>
+        <!--v-app-bar-title>OER-Graph</v-app-bar-title-->
         <v-spacer />
         <v-text-field
           :loading="search.loading"
@@ -267,55 +270,51 @@ export default {
   </v-dialog>
 
   <v-card class="info-card mx-auto" max-width="344" hover v-show="article.show">
-    <v-card-item>
-      <v-card-title>
+    <v-btn
+      icon="mdi-close"
+      variant="text"
+      size="small"
+      class="position-absolute top-0 right-0 mt-1 mr-1"
+      aria-label="Close"
+      @click="article.show = false"
+    />
+    <v-card-item style="margin-top: 1rem">
+      <v-card-title class="no-ellipsis">
         {{ article.content?.title }}
       </v-card-title>
 
       <v-card-subtitle>
         {{ article.content?.authors }}
 
-        <span v-show="article.content?.affiliation">
-          - (<i>
-            {{ article.content?.affiliation }}
-          </i>
+        <span v-show="article.content?.authors && article.content?.affiliation">-</span>
 
-          )
+        <span v-show="article.content?.affiliation">
+          (<i> {{ article.content?.affiliation }} </i>)
         </span>
       </v-card-subtitle>
     </v-card-item>
 
     <v-card-text>
       {{ article.content?.summary }}
+      <ul>
+        <li v-for="tag in article.content?.tag || []">{{ tag }}</li>
+      </ul>
     </v-card-text>
 
     <v-card-actions class="pt-0">
       <v-btn
         color="teal-accent-4"
-        text="Close"
+        text="Download"
         variant="text"
-        @click="article.show = false"
+        @click="load(article.content?.id)"
       ></v-btn>
     </v-card-actions>
   </v-card>
 
-  <!--v-dialog width="auto">
-    <v-card
-      max-width="400"
-      prepend-icon="mdi-information-outline"
-      :title="article.content?.title"
-    >
-      <template v-slot:actions>
-        <v-btn class="ms-auto" text="Ok" @click="article.show = false"></v-btn>
-      </template>
-
-      <v-card-text>
-        Diese Karte zeigt das <i>Netzwerk</i> aller OER-Inhalte des sächsischen
-        OPAL-Systems. Jeder <i>Knoten</i> stellt einen OER-Inhalt dar und jede Kante eine
-        Ähnlichkeitsbeziehung zwischen den Beiträgen.
-      </v-card-text>
-    </v-card>
-  </v-dialog-->
+  <div id="information">
+    <h1>OER Graph</h1>
+    <span ref="nodes">0</span> Knoten, <span ref="links">0</span> Kanten
+  </div>
 </template>
 
 <style>
@@ -331,5 +330,24 @@ export default {
   bottom: 1rem;
   max-height: 60%;
   background-color: #7778 !important;
+}
+
+.no-ellipsis {
+  white-space: normal !important;
+  overflow: visible !important;
+  text-overflow: unset !important; /* or 'clip' */
+  word-break: break-word; /* long words won't bust the card */
+}
+
+ul {
+  margin: 1rem;
+}
+
+#information {
+  position: absolute;
+  top: 3.5rem;
+  left: 1rem;
+  z-index: 1000;
+  color: white;
 }
 </style>
