@@ -138,6 +138,7 @@ export default {
       fetch("db.json")
         .then((response) => response.json())
         .then((json) => {
+          const self = this;
           database = json;
 
           this.updateCounters({ nodes: [], links: [] });
@@ -147,7 +148,7 @@ export default {
           })
             .graphData({ nodes: [], links: [] })
             .nodeColor((node) => stringToColor(node.tag[0]))
-
+            .nodeVal((n) => n.value || 4)
             .onNodeRightClick((node) => {
               this.loadConnections(node.id);
             })
@@ -175,7 +176,7 @@ export default {
 
           const params = new URLSearchParams(window.location.search);
           const initialSearch = params.get("search");
-          const self = this;
+
           if (initialSearch) {
             setTimeout(function () {
               self.search.text = initialSearch; // pre‑fill the field
@@ -202,6 +203,13 @@ export default {
 
     handleHover(node?: Node) {
       if (!node) return;
+
+      const config = Graph.graphData();
+
+      for (let i = 0; i < config.nodes.length; i++) {
+        config.nodes[i].value = config.nodes[i].id === node.id ? 30 : 4;
+      }
+      Graph.graphData(config);
 
       this.article.content = node;
       this.article.show = true;
@@ -237,6 +245,10 @@ export default {
       const newNodes = resetNodePositions(Array.from(keepIds, (id) => dbNode.get(id)));
 
       /* ---------- update the graph ---------- */
+
+      for (let i = 0; i < newNodes.length; i++) {
+        newNodes[i].value = newNodes[i].id === id ? 50 : 4;
+      }
 
       Graph.graphData({ nodes: newNodes, links: newLinks }); //.d3ReheatSimulation(); // optional: settle layout again
 
