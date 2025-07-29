@@ -362,6 +362,8 @@ export default {
       <ul>
         <li v-for="tag in article.content?.tag || []">{{ tag }}</li>
       </ul>
+
+      Typ: {{ article.content?.type }} / {{ article.content?.file }}
     </v-card-text>
 
     <v-card-actions class="pt-0">
