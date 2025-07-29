@@ -344,7 +344,12 @@ export default {
     </v-card>
   </v-dialog>
 
-  <v-card class="info-card mx-auto" max-width="344" hover v-show="article.show">
+  <v-card
+    class="info-card mx-auto"
+    style="overflow: auto; max-width: 344px"
+    hover
+    v-show="article.show"
+  >
     <v-btn
       icon="mdi-close"
       variant="text"
@@ -412,7 +417,7 @@ export default {
   z-index: 100;
   right: 1rem;
   bottom: 1rem;
-  max-height: 60%;
+  overflow: auto;
   background-color: #7778 !important;
 }
 
@@ -439,7 +444,7 @@ ul {
   font-size: 12px;
   padding: 1px 4px;
   border-radius: 4px;
-  background-color: rgba(0, 0, 0, 0.5);
+  background-color: rgba(0, 0, 0, 0.25);
   user-select: none;
 }
 </style>
