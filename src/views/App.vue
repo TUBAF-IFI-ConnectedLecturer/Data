@@ -79,15 +79,26 @@ export default {
     // Define any methods here if needed
     async handleSearch() {
       this.search.loading = true;
+      this.article.show = false;
+      Graph.pauseAnimation(); // make sure the loop is idle
 
       if (!database || !Graph) return;
 
-      const term = this.search.text.trim().toLowerCase();
+      const rawTerm = this.search.text.trim(); // keep user casing*
+      const url = new URL(window.location.href);
+      rawTerm
+        ? url.searchParams.set("search", rawTerm)
+        : url.searchParams.delete("search");
+      history.replaceState({}, "", url); // no page reload
+
+      const term = rawTerm.toLowerCase();
 
       // 1️⃣  Show the entire graph **only** when the search term is exactly '*'
       if (term === "*") {
         Graph.graphData(database).d3ReheatSimulation();
         this.updateCounters(database);
+        Graph.resumeAnimation();
+        this.search.loading = false;
         return;
       }
 
@@ -95,6 +106,8 @@ export default {
       if (!term) {
         Graph.graphData({ nodes: [], links: [] });
         this.updateCounters({ nodes: [], links: [] });
+        Graph.resumeAnimation();
+        this.search.loading = false;
         return;
       }
 
@@ -143,9 +156,8 @@ export default {
         .cooldownTicks(100)
         .d3ReheatSimulation()
         .zoomToFit(600, 40);
-
+      Graph.resumeAnimation();
       this.updateCounters({ nodes, links });
-
       this.search.loading = false;
     },
 
@@ -163,15 +175,25 @@ export default {
             .graphData({ nodes: [], links: [] })
             .nodeAutoColorBy((node) => node.tag[0])
             .nodeLabel((node) => `${node.title}`)
-            .onNodeClick((node) => load(node.id))
+            .onNodeClick((node) => this.load(node.id))
             .onNodeHover(this.handleHover);
           //.onNodeRightClick(showNodeInfo);
-
-          //this.handleSearch();
 
           // Enable WebXR
           const renderer = Graph.renderer();
           renderer.xr.enabled = true;
+
+          Graph.pauseAnimation();
+
+          const params = new URLSearchParams(window.location.search);
+          const initialSearch = params.get("search");
+          const self = this;
+          if (initialSearch) {
+            setTimeout(function () {
+              self.search.text = initialSearch; // pre‑fill the field
+              self.handleSearch(); // execute the search
+            }, 1000);
+          }
 
           //this.$refs.graph.appendChild(VRButton.createButton(renderer));
         })
@@ -294,7 +316,7 @@ export default {
       </v-card-subtitle>
     </v-card-item>
 
-    <v-card-text>
+    <v-card-text style="max-height: 400px; overflow: auto">
       {{ article.content?.summary }}
       <ul>
         <li v-for="tag in article.content?.tag || []">{{ tag }}</li>
