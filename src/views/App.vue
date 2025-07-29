@@ -148,8 +148,10 @@ export default {
             .graphData({ nodes: [], links: [] })
             .nodeColor((node) => stringToColor(node.tag[0]))
 
-            .onNodeRightClick((node) => this.load(node.id))
-            .onNodeHover(this.handleHover)
+            .onNodeRightClick((node) => {
+              this.loadConnections(node.id);
+            })
+            //.onNodeHover(this.handleHover)
             .nodeThreeObject((node) => {
               if (this.settings.title) {
                 const nodeEl = document.createElement("span");
@@ -161,9 +163,7 @@ export default {
               }
             })
             .nodeThreeObjectExtend(true)
-            .onNodeClick((node) => {
-              this.loadConnections(node.id);
-            })
+            .onNodeClick(this.handleHover)
             .nodeLabel((node) => `${node.title}`);
 
           // Enable WebXR
@@ -372,6 +372,13 @@ export default {
         text="Download"
         variant="text"
         @click="load(article.content?.id)"
+      ></v-btn>
+
+      <v-btn
+        color="teal-accent-4"
+        text="Erweitern"
+        variant="text"
+        @click="loadConnections(article.content?.id)"
       ></v-btn>
     </v-card-actions>
   </v-card>
