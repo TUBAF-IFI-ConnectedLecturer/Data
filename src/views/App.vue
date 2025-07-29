@@ -1,6 +1,7 @@
 <script lang="ts">
 import { VRButton } from "../../node_modules/three/examples/jsm/webxr/VRButton.js";
 //import ForceGraph3D from "3d-force-graph";
+import SpriteText from "three-spritetext";
 
 var Graph: any = null;
 
@@ -63,6 +64,10 @@ export default {
 
       open: {
         description: false,
+      },
+
+      settings: {
+        title: false,
       },
 
       article: {
@@ -176,7 +181,19 @@ export default {
             .nodeAutoColorBy((node) => node.tag[0])
             .nodeLabel((node) => `${node.title}`)
             .onNodeClick((node) => this.load(node.id))
-            .onNodeHover(this.handleHover);
+            .onNodeHover(this.handleHover)
+            .nodeThreeObject((node) => {
+              if (this.settings.title) {
+                const sprite = new SpriteText(node.title);
+
+                sprite.material.depthWrite = false; // make sprite background transparent
+                //sprite.color = node.tag[0];
+                sprite.textHeight = 8;
+                sprite.center.y = -0.6; // shift above node
+                return sprite;
+              }
+            })
+            .nodeThreeObjectExtend(true);
           //.onNodeRightClick(showNodeInfo);
 
           // Enable WebXR
@@ -184,6 +201,7 @@ export default {
           renderer.xr.enabled = true;
 
           Graph.pauseAnimation();
+          Graph.d3Force("charge").strength(-500);
 
           const params = new URLSearchParams(window.location.search);
           const initialSearch = params.get("search");
@@ -221,6 +239,17 @@ export default {
 
     load(id: string) {
       window.open(`https://bildungsportal.sachsen.de/opal/oer/${id}`, "_blank");
+    },
+
+    toggleTitle() {
+      this.settings.title = !this.settings.title;
+
+      if (this.settings.title) {
+        Graph.d3Force("charge").strength(-500);
+      } else {
+        Graph.d3Force("charge").strength(100);
+      }
+      Graph.refresh();
     },
   },
 
@@ -267,6 +296,13 @@ export default {
                 title="Beschreibung"
                 prepend-icon="mdi-information-outline"
                 @click="open.description = true"
+              />
+              <v-list-item
+                :title="
+                  settings.title ? 'Titel im Graph ausblenden' : 'Titel im Graph zeigen'
+                "
+                prepend-icon="mdi-information-outline"
+                @click="toggleTitle"
               />
             </v-list>
           </v-menu>
