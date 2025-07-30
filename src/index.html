@@ -26,6 +26,48 @@
         touch-action: manipulation;
       }
     </style>
+
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', function () {
+          let sw = './sw.js'
+          try {
+            navigator.serviceWorker
+              .register(sw)
+              .then(console.log)
+              .catch(console.error)
+          } catch (e) {
+            console.warn('sw: ', e)
+          }
+        })
+      }
+    </script>
+
+    <link rel="shortcut icon" sizes="192x192" href="../assets/logo_192.png" />
+
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="application-name" content="Lia" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta
+      name="apple-mobile-web-app-status-bar-style"
+      content="black-translucent"
+    />
+    <meta name="apple-mobile-web-app-title" content="LiaScript" />
+    <meta name="msapplication-TileImage" content="../assets/logo_512.png" />
+    <meta name="msapplication-TileColor" content="#0071c5" />
+    <meta name="msapplication-tap-highlight" content="no" />
+    <meta name="theme-color" content="#000000" />
+
+    <meta
+      name="description"
+      content="Suche verknüpfte OER Dokumente im sächsischen OPAL"
+    />
+
+    <link rel="manifest" href="./manifest.webmanifest" />
+
+    <!-- Favicons -->
+    <link rel="apple-touch-icon" href="../assets/logo_192.png" />
+    <link rel="icon" href="../assets/logo_192.png" type="image/png" />
   </head>
   <body></body>
 </html>
