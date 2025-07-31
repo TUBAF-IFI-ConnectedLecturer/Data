@@ -145,6 +145,7 @@ export default {
 
           Graph = new ForceGraph3D(this.$refs.graph, {
             extraRenderers: [new CSS2DRenderer()],
+            controlType: "orbit",
           })
             .graphData({ nodes: [], links: [] })
             .nodeColor((node) => stringToColor(node.tag[0]))
@@ -229,6 +230,7 @@ export default {
         return { source: link.source.id, target: link.target.id };
       }); // fresh array copy
 
+      let updates = false;
       /* ---------- scan the full link table once ---------- */
       for (const { source, target } of database.links) {
         const sId = typeof source === "object" ? source.id : source;
@@ -238,7 +240,13 @@ export default {
         if ((sId === id || tId === id) && dbNode.has(sId) && dbNode.has(tId)) {
           newLinks.push({ source: sId, target: tId });
           keepIds.add(sId).add(tId); // Set.add is chain‑able
+
+          updates = true;
         }
+      }
+
+      if (!updates) {
+        return;
       }
 
       /* ---------- build the matching node list ---------- */
