@@ -306,6 +306,17 @@ export default {
       Graph.graphData({ nodes: newNodes, links: newLinks }); //.d3ReheatSimulation(); // optional: settle layout again
 
       this.updateCounters({ nodes: newNodes, links: newLinks });
+
+      if (this.split === "both") {
+        this.$nextTick(() =>
+          // wait for Vue to paint
+          requestAnimationFrame(() => {
+            const index = Graph.graphData().nodes.findIndex((n) => n.id === node.id);
+            // wait for VVirtualScroll to measure
+            this.$refs.list.scrollToIndex(index);
+          })
+        );
+      }
     },
 
     toggleTitle() {
