@@ -222,7 +222,7 @@ export default {
 
       let i = 0;
       for (i = 0; i < config.nodes.length; i++) {
-        config.nodes[i].value = config.nodes[i].id === node.id ? 30 : 4;
+        config.nodes[i].value = config.nodes[i].id === node.id ? 70 : 4;
       }
 
       Graph.graphData(config);
@@ -346,8 +346,8 @@ export default {
 
 <template>
   <v-card class="mx-auto">
-    <v-layout>
-      <v-app-bar density="compact">
+    <v-layout class="d-flex flex-column" style="height: 100vh">
+      <v-app-bar density="compact" class="flex-shrink-0">
         <template v-slot:prepend> </template>
 
         <!--v-app-bar-title>OER-Graph</v-app-bar-title-->
@@ -388,136 +388,137 @@ export default {
           </v-menu>
         </template>
       </v-app-bar>
+      <v-main class="flex-grow-1 overflow-hidden">
+        <splitpanes vertical class="default-theme" style="height: 100%">
+          <pane size="70">
+            <div ref="graph" id="graph" style="background-color: black"></div>
 
-      <splitpanes vertical class="default-theme">
-        <pane size="70">
-          <div ref="graph" id="graph" style="background-color: black"></div>
-
-          <v-card
-            class="info-card mx-auto"
-            style="overflow: auto; max-width: 344px"
-            hover
-            v-show="article.show && this.split === 'graph'"
-          >
-            <v-btn
-              icon="mdi-close"
-              variant="text"
-              size="small"
-              class="position-absolute top-0 right-0 mt-1 mr-1"
-              aria-label="Close"
-              @click="article.show = false"
-            />
-            <v-card-item style="margin-top: 1rem">
-              <v-card-title class="no-ellipsis">
-                {{ article.content?.title }}
-              </v-card-title>
-
-              <v-card-subtitle>
-                {{ article.content?.authors }}
-
-                <span v-show="article.content?.authors && article.content?.affiliation"
-                  >-</span
-                >
-
-                <span v-show="article.content?.affiliation">
-                  (<i> {{ article.content?.affiliation }} </i>)
-                </span>
-              </v-card-subtitle>
-            </v-card-item>
-
-            <v-card-text style="max-height: 400px; overflow: auto">
-              {{ article.content?.summary }}
-              <ul>
-                <li v-for="tag in article.content?.tag || []">{{ tag }}</li>
-              </ul>
-
-              Typ: {{ article.content?.type }} / {{ article.content?.file }}
-            </v-card-text>
-
-            <v-card-actions class="pt-0">
+            <v-card
+              class="info-card mx-auto"
+              style="overflow: auto; max-width: 344px"
+              hover
+              v-show="article.show && this.split === 'graph'"
+            >
               <v-btn
-                color="teal-accent-4"
-                text="Download"
+                icon="mdi-close"
                 variant="text"
-                @click="load(article.content?.id)"
-              ></v-btn>
+                size="small"
+                class="position-absolute top-0 right-0 mt-1 mr-1"
+                aria-label="Close"
+                @click="article.show = false"
+              />
+              <v-card-item style="margin-top: 1rem">
+                <v-card-title class="no-ellipsis">
+                  {{ article.content?.title }}
+                </v-card-title>
 
-              <v-btn
-                color="teal-accent-4"
-                text="Erweitern"
-                variant="text"
-                @click="loadConnections(article.content)"
-              ></v-btn>
-            </v-card-actions>
-          </v-card>
+                <v-card-subtitle>
+                  {{ article.content?.authors }}
 
-          <div id="information">
-            <h1>OER Graph</h1>
-            <span ref="nodes">0</span> Knoten, <span ref="links">0</span> Kanten
-          </div>
-        </pane>
+                  <span v-show="article.content?.authors && article.content?.affiliation"
+                    >-</span
+                  >
 
-        <pane min-size="20" style="background-color: black">
-          <v-virtual-scroll
-            :key="version"
-            ref="list"
-            :items="visibleNodes"
-            height="100vh"
-          >
-            <template v-slot:default="{ item }">
-              <div class="pa-2">
-                <v-card
-                  class="mx-auto"
-                  :style="item.id === this.activeId ? 'border: 2px solid orange' : ''"
-                  hover
-                  @click="handleHover(item)"
-                >
-                  <v-card-item style="margin-top: 1rem">
-                    <v-card-title class="no-ellipsis">
-                      {{ item.title }}
-                    </v-card-title>
+                  <span v-show="article.content?.affiliation">
+                    (<i> {{ article.content?.affiliation }} </i>)
+                  </span>
+                </v-card-subtitle>
+              </v-card-item>
 
-                    <v-card-subtitle>
-                      {{ item.authors }}
+              <v-card-text style="max-height: 400px; overflow: auto">
+                {{ article.content?.summary }}
+                <ul>
+                  <li v-for="tag in article.content?.tag || []">{{ tag }}</li>
+                </ul>
 
-                      <span v-show="item.authors && item.affiliation">-</span>
+                Typ: {{ article.content?.type }} / {{ article.content?.file }}
+              </v-card-text>
 
-                      <span v-show="item.affiliation">
-                        (<i> {{ item.affiliation }} </i>)
-                      </span>
-                    </v-card-subtitle>
-                  </v-card-item>
+              <v-card-actions class="pt-0">
+                <v-btn
+                  color="teal-accent-4"
+                  text="Download"
+                  variant="text"
+                  @click="load(article.content?.id)"
+                ></v-btn>
 
-                  <v-card-text>
-                    {{ item.summary }}
-                    <ul>
-                      <li v-for="tag in item.tag || []">{{ tag }}</li>
-                    </ul>
+                <v-btn
+                  color="teal-accent-4"
+                  text="Erweitern"
+                  variant="text"
+                  @click="loadConnections(article.content)"
+                ></v-btn>
+              </v-card-actions>
+            </v-card>
 
-                    Typ: {{ item.type }} / {{ item.file }}
-                  </v-card-text>
+            <div id="information">
+              <h1>OER Graph</h1>
+              <span ref="nodes">0</span> Knoten, <span ref="links">0</span> Kanten
+            </div>
+          </pane>
 
-                  <v-card-actions class="pt-0">
-                    <v-btn
-                      color="teal-accent-4"
-                      text="Download"
-                      variant="text"
-                      @click.stop="load(item.id)"
-                    ></v-btn>
+          <pane min-size="20" style="background-color: black">
+            <v-virtual-scroll
+              :key="version"
+              ref="list"
+              :items="visibleNodes"
+              height="100vh"
+            >
+              <template v-slot:default="{ item }">
+                <div class="pa-2">
+                  <v-card
+                    class="mx-auto"
+                    :style="item.id === this.activeId ? 'border: 2px solid orange' : ''"
+                    hover
+                    @click="handleHover(item)"
+                  >
+                    <v-card-item style="margin-top: 1rem">
+                      <v-card-title class="no-ellipsis">
+                        {{ item.title }}
+                      </v-card-title>
 
-                    <v-btn
-                      color="teal-accent-4"
-                      text="Erweitern"
-                      variant="text"
-                      @click.stop="loadConnections(item)"
-                    ></v-btn>
-                  </v-card-actions>
-                </v-card>
-              </div>
-            </template>
-          </v-virtual-scroll>
-        </pane>
-      </splitpanes>
+                      <v-card-subtitle>
+                        {{ item.authors }}
+
+                        <span v-show="item.authors && item.affiliation">-</span>
+
+                        <span v-show="item.affiliation">
+                          (<i> {{ item.affiliation }} </i>)
+                        </span>
+                      </v-card-subtitle>
+                    </v-card-item>
+
+                    <v-card-text>
+                      {{ item.summary }}
+                      <ul>
+                        <li v-for="tag in item.tag || []">{{ tag }}</li>
+                      </ul>
+
+                      Typ: {{ item.type }} / {{ item.file }}
+                    </v-card-text>
+
+                    <v-card-actions class="pt-0">
+                      <v-btn
+                        color="teal-accent-4"
+                        text="Download"
+                        variant="text"
+                        @click.stop="load(item.id)"
+                      ></v-btn>
+
+                      <v-btn
+                        color="teal-accent-4"
+                        text="Erweitern"
+                        variant="text"
+                        @click.stop="loadConnections(item)"
+                      ></v-btn>
+                    </v-card-actions>
+                  </v-card>
+                </div>
+              </template>
+            </v-virtual-scroll>
+          </pane>
+        </splitpanes>
+      </v-main>
     </v-layout>
   </v-card>
 
