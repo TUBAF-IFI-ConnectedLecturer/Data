@@ -41,6 +41,7 @@ export default {
   data() {
     return {
       version: 0,
+      activeId: null as string | null,
       search: {
         text: "",
         loading: false,
@@ -49,6 +50,8 @@ export default {
       open: {
         description: false,
       },
+
+      split: "both",
 
       settings: {
         title: false,
@@ -157,7 +160,7 @@ export default {
             .nodeColor((node) => stringToColor(node.tag[0]))
             .nodeVal((n) => n.value || 4)
             .onNodeRightClick((node) => {
-              this.loadConnections(node.id);
+              this.loadConnections(node);
             })
             //.onNodeHover(this.handleHover)
             .nodeThreeObject((node) => {
@@ -171,7 +174,7 @@ export default {
               }
             })
             .nodeThreeObjectExtend(true)
-            .onNodeClick(this.handleHover)
+            .onNodeClick((node) => this.handleHover(node, true))
             .nodeLabel((node) => `${node.title}`);
 
           // Enable WebXR
@@ -210,12 +213,15 @@ export default {
       Graph.width(this.$refs.graph.clientWidth).height(this.$refs.graph.clientHeight);
     },
 
-    handleHover(node?: Node) {
+    handleHover(node?: Node, scroll = false) {
       if (!node) return;
+
+      this.activeId = node.id;
 
       const config = Graph.graphData();
 
-      for (let i = 0; i < config.nodes.length; i++) {
+      let i = 0;
+      for (i = 0; i < config.nodes.length; i++) {
         config.nodes[i].value = config.nodes[i].id === node.id ? 30 : 4;
       }
 
@@ -223,13 +229,43 @@ export default {
 
       this.article.content = node;
       this.article.show = true;
+
+      if (this.split === "both") {
+        this.center(node);
+        const index = Graph.graphData().nodes.findIndex((n) => n.id === node.id);
+        if (scroll) {
+          this.$nextTick(() =>
+            // wait for Vue to paint
+            requestAnimationFrame(() => {
+              // wait for VVirtualScroll to measure
+              this.$refs.list.scrollToIndex(index);
+            })
+          );
+        }
+      }
+    },
+
+    center(node) {
+      const distance = 1000;
+      const distRatio = 1 + distance / Math.hypot(node.x, node.y, node.z);
+
+      const newPos =
+        node.x || node.y || node.z
+          ? { x: node.x * distRatio, y: node.y * distRatio, z: node.z * distRatio }
+          : { x: 0, y: 0, z: distance }; // special case if node is in (0,0,0)
+
+      Graph.cameraPosition(
+        newPos, // new position
+        node, // lookAt ({ x, y, z })
+        3000 // ms transition duration
+      );
     },
 
     load(id: string) {
       window.open(`https://bildungsportal.sachsen.de/opal/oer/${id}`, "_blank");
     },
 
-    loadConnections(id: string) {
+    loadConnections(node) {
       /* ---------- helpers & cached look‑ups ---------- */
       const live = Graph.graphData(); // current graph
       const dbNode = new Map(database.nodes.map((n) => [n.id, n])); // O(1) lookup
@@ -246,7 +282,7 @@ export default {
         const tId = typeof target === "object" ? target.id : target;
 
         // only links that touch the clicked id *and* whose endpoints both exist
-        if ((sId === id || tId === id) && dbNode.has(sId) && dbNode.has(tId)) {
+        if ((sId === node.id || tId === node.id) && dbNode.has(sId) && dbNode.has(tId)) {
           newLinks.push({ source: sId, target: tId });
           keepIds.add(sId).add(tId); // Set.add is chain‑able
 
@@ -264,7 +300,7 @@ export default {
       /* ---------- update the graph ---------- */
 
       for (let i = 0; i < newNodes.length; i++) {
-        newNodes[i].value = newNodes[i].id === id ? 50 : 4;
+        newNodes[i].value = newNodes[i].id === node.id ? 50 : 4;
       }
 
       Graph.graphData({ nodes: newNodes, links: newLinks }); //.d3ReheatSimulation(); // optional: settle layout again
@@ -355,13 +391,13 @@ export default {
 
       <splitpanes vertical class="default-theme">
         <pane size="70">
-          <div ref="graph" id="graph"></div>
+          <div ref="graph" id="graph" style="background-color: black"></div>
 
           <v-card
             class="info-card mx-auto"
             style="overflow: auto; max-width: 344px"
             hover
-            v-show="article.show"
+            v-show="article.show && this.split === 'graph'"
           >
             <v-btn
               icon="mdi-close"
@@ -410,7 +446,7 @@ export default {
                 color="teal-accent-4"
                 text="Erweitern"
                 variant="text"
-                @click="loadConnections(article.content?.id)"
+                @click="loadConnections(article.content)"
               ></v-btn>
             </v-card-actions>
           </v-card>
@@ -421,11 +457,21 @@ export default {
           </div>
         </pane>
 
-        <pane min-size="20">
-          <v-virtual-scroll :items="visibleNodes" height="100vh">
-            <template #default="{ item, index }">
+        <pane min-size="20" style="background-color: black">
+          <v-virtual-scroll
+            :key="version"
+            ref="list"
+            :items="visibleNodes"
+            height="100vh"
+          >
+            <template v-slot:default="{ item }">
               <div class="pa-2">
-                <v-card class="mx-auto" hover @click="handleHover(item)">
+                <v-card
+                  class="mx-auto"
+                  :style="item.id === this.activeId ? 'border: 2px solid orange' : ''"
+                  hover
+                  @click="handleHover(item)"
+                >
                   <v-card-item style="margin-top: 1rem">
                     <v-card-title class="no-ellipsis">
                       {{ item.title }}
@@ -456,14 +502,14 @@ export default {
                       color="teal-accent-4"
                       text="Download"
                       variant="text"
-                      @click="load(item.id)"
+                      @click.stop="load(item.id)"
                     ></v-btn>
 
                     <v-btn
                       color="teal-accent-4"
                       text="Erweitern"
                       variant="text"
-                      @click="loadConnections(item.id)"
+                      @click.stop="loadConnections(item)"
                     ></v-btn>
                   </v-card-actions>
                 </v-card>
