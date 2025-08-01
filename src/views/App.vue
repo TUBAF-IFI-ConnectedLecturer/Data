@@ -473,7 +473,7 @@ export default {
               :key="version"
               ref="list"
               :items="visibleNodes"
-              height="100vh"
+              height="calc(100vh - 48px)"
             >
               <template v-slot:default="{ item }">
                 <div class="pa-2">
