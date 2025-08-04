@@ -162,7 +162,6 @@ export default {
             .onNodeRightClick((node) => {
               this.loadConnections(node);
             })
-            //.onNodeHover(this.handleHover)
             .nodeThreeObject((node) => {
               if (this.settings.title) {
                 const nodeEl = document.createElement("span");
@@ -174,7 +173,7 @@ export default {
               }
             })
             .nodeThreeObjectExtend(true)
-            .onNodeClick((node) => this.handleHover(node, true))
+            .onNodeClick((node) => this.showArticle(node, true))
             .nodeLabel((node) => `${node.title}`);
 
           // Enable WebXR
@@ -186,13 +185,18 @@ export default {
 
           const params = new URLSearchParams(window.location.search);
           const initialSearch = params.get("search");
+          const initialTitle = params.get("title");
 
-          if (initialSearch) {
-            setTimeout(function () {
+          setTimeout(function () {
+            if (initialTitle) {
+              self.toggleTitle();
+            }
+
+            if (initialSearch) {
               self.search.text = initialSearch; // pre‑fill the field
               self.handleSearch(); // execute the search
-            }, 1000);
-          }
+            }
+          }, 1000);
 
           //this.$refs.graph.appendChild(VRButton.createButton(renderer));
         })
@@ -213,7 +217,7 @@ export default {
       Graph.width(this.$refs.graph.clientWidth).height(this.$refs.graph.clientHeight);
     },
 
-    handleHover(node?: Node, scroll = false) {
+    showArticle(node?: Node, scroll = false) {
       if (!node) return;
 
       this.activeId = node.id;
@@ -323,11 +327,14 @@ export default {
       Graph.pauseAnimation();
       this.settings.title = !this.settings.title;
 
+      const url = new URL(window.location.href);
       if (this.settings.title) {
-        //Graph.d3Force("charge").strength(-500);
+        url.searchParams.set("title", "1");
       } else {
-        //Graph.d3Force("charge").strength(-50);
+        url.searchParams.delete("title");
       }
+      history.replaceState({}, "", url);
+
       Graph.refresh();
       Graph.resumeAnimation();
       Graph.d3ReheatSimulation();
@@ -481,7 +488,7 @@ export default {
                     class="mx-auto"
                     :style="item.id === this.activeId ? 'border: 2px solid orange' : ''"
                     hover
-                    @click="handleHover(item)"
+                    @click="showArticle(item)"
                   >
                     <v-card-item style="margin-top: 1rem">
                       <v-card-title class="no-ellipsis">
