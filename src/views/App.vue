@@ -4,7 +4,7 @@ import "splitpanes/dist/splitpanes.css";
 
 //import { VRButton } from "../../node_modules/three/examples/jsm/webxr/VRButton.js";
 //import ForceGraph3D from "3d-force-graph";
-import { includes, resetNodePositions, stringToColor } from "../utils";
+import { includes, resetNodePositions, stringToColor, getOrientation } from "../utils";
 import {
   CSS2DRenderer,
   CSS2DObject,
@@ -52,6 +52,8 @@ export default {
       },
 
       split: "both",
+
+      orientation: getOrientation(),
 
       settings: {
         title: false,
@@ -186,6 +188,11 @@ export default {
           const params = new URLSearchParams(window.location.search);
           const initialSearch = params.get("search");
           const initialTitle = params.get("title");
+          const initialView = params.get("view");
+
+          if (initialView) {
+            this.split = initialView;
+          }
 
           setTimeout(function () {
             if (initialTitle) {
@@ -215,6 +222,27 @@ export default {
     handleResize() {
       if (!Graph) return;
       Graph.width(this.$refs.graph.clientWidth).height(this.$refs.graph.clientHeight);
+    },
+
+    handleSplitChange(kind: "graph" | "both" | "list") {
+      this.split = kind;
+
+      const url = new URL(window.location.href);
+
+      switch (kind) {
+        case "graph": {
+          url.searchParams.set("view", "graph");
+          break;
+        }
+        case "list": {
+          url.searchParams.set("view", "list");
+          break;
+        }
+        default: {
+          url.searchParams.delete("view");
+        }
+      }
+      history.replaceState({}, "", url);
     },
 
     showArticle(node?: Node, scroll = false) {
@@ -399,17 +427,38 @@ export default {
                 :title="
                   settings.title ? 'Titel im Graph ausblenden' : 'Titel im Graph zeigen'
                 "
-                prepend-icon="mdi-information-outline"
+                :prepend-icon="
+                  settings.title
+                    ? 'mdi-vector-polyline-minus'
+                    : 'mdi-vector-polyline-plus'
+                "
                 @click="toggleTitle"
               />
+              <v-list-item title="Darstellung:" prepend-icon="mdi-information-outline" />
+              <v-list-item>
+                <v-radio-group
+                  v-model="split"
+                  @update:model-value="handleSplitChange"
+                  class="pl-13 pt-0"
+                  density="compact"
+                >
+                  <v-radio label="Graph" value="graph"></v-radio>
+                  <v-radio label="Beides" value="both"></v-radio>
+                  <v-radio label="Liste" value="list"></v-radio>
+                </v-radio-group>
+              </v-list-item>
             </v-list>
           </v-menu>
         </template>
       </v-app-bar>
       <v-main class="flex-grow-1 overflow-hidden">
-        <splitpanes vertical class="default-theme" style="height: 100%">
-          <pane size="70">
-            <div ref="graph" id="graph" style="background-color: black"></div>
+        <splitpanes
+          :horizontal="orientation !== 'horizontal'"
+          class="default-theme"
+          style="max-height: calc(100vh - 48px)"
+        >
+          <pane :size="split === 'graph' ? 100 : split === 'both' ? 70 : 0">
+            <div ref="graph" id="graph"></div>
 
             <v-card
               class="info-card mx-auto"
@@ -475,7 +524,10 @@ export default {
             </div>
           </pane>
 
-          <pane min-size="20" style="background-color: black">
+          <pane
+            :size="split === 'graph' ? 0 : split === 'both' ? 30 : 100"
+            style="background-color: black"
+          >
             <v-virtual-scroll
               :key="version"
               ref="list"
@@ -558,7 +610,8 @@ export default {
 <style>
 #graph {
   width: 100%;
-  height: 100%;
+  max-height: calc(100vh - 48px);
+  background-color: black;
 }
 
 .info-card {

@@ -48,3 +48,8 @@ export function includes(base: string, term: string) {
 
   return true
 }
+
+export function getOrientation() {
+  // fall back to innerWidth / innerHeight
+  return window.innerWidth > window.innerHeight ? 'horizontal' : 'vertical'
+}
