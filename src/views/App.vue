@@ -189,6 +189,7 @@ export default {
           const initialSearch = params.get("search");
           const initialTitle = params.get("title");
           const initialView = params.get("view");
+          const initialId = params.get("id");
 
           if (initialView) {
             this.split = initialView;
@@ -202,6 +203,14 @@ export default {
             if (initialSearch) {
               self.search.text = initialSearch; // pre‑fill the field
               self.handleSearch(); // execute the search
+
+              if (initialId) {
+                setTimeout(function () {
+                  const node = Graph.graphData().nodes.find((n) => n.id === initialId);
+
+                  self.showArticle(node, true);
+                }, 1000);
+              }
             }
           }, 1000);
 
@@ -246,9 +255,17 @@ export default {
     },
 
     showArticle(node?: Node, scroll = false) {
-      if (!node) return;
+      const url = new URL(window.location.href);
+
+      if (!node) {
+        url.searchParams.delete("id");
+        history.replaceState({}, "", url);
+        return;
+      }
 
       this.activeId = node.id;
+      url.searchParams.set("id", this.activeId);
+      history.replaceState({}, "", url);
 
       const config = Graph.graphData();
 
@@ -262,18 +279,20 @@ export default {
       this.article.content = node;
       this.article.show = true;
 
-      if (this.split === "both") {
+      if (this.split !== "list") {
         this.center(node);
+      }
+
+      if (this.split !== "graph" && scroll) {
         const index = Graph.graphData().nodes.findIndex((n) => n.id === node.id);
-        if (scroll) {
-          this.$nextTick(() =>
-            // wait for Vue to paint
-            requestAnimationFrame(() => {
-              // wait for VVirtualScroll to measure
-              this.$refs.list.scrollToIndex(index);
-            })
-          );
-        }
+
+        this.$nextTick(() =>
+          // wait for Vue to paint
+          requestAnimationFrame(() => {
+            // wait for VVirtualScroll to measure
+            this.$refs.list.scrollToIndex(index);
+          })
+        );
       }
     },
 
@@ -396,7 +415,9 @@ export default {
       <v-app-bar density="compact" class="flex-shrink-0">
         <template v-slot:prepend> </template>
 
-        <!--v-app-bar-title>OER-Graph</v-app-bar-title-->
+        <v-app-bar-title
+          >OER-Graph (<span ref="nodes">0</span>/<span ref="links">0</span>)
+        </v-app-bar-title>
         <v-spacer />
         <v-text-field
           :loading="search.loading"
@@ -517,11 +538,6 @@ export default {
                 ></v-btn>
               </v-card-actions>
             </v-card>
-
-            <div id="information">
-              <h1>OER Graph</h1>
-              <span ref="nodes">0</span> Knoten, <span ref="links">0</span> Kanten
-            </div>
           </pane>
 
           <pane
