@@ -1,6 +1,7 @@
 <script lang="ts">
 import { Splitpanes, Pane } from "splitpanes";
 import "splitpanes/dist/splitpanes.css";
+import * as THREE from "three";
 
 import { VRButton } from "../../node_modules/three/examples/jsm/webxr/VRButton.js";
 //import ForceGraph3D from "3d-force-graph";
@@ -159,18 +160,72 @@ export default {
             controlType: "orbit",
           })
             .graphData({ nodes: [], links: [] })
-            .nodeColor((node) => stringToColor(node.tag[0]))
+            .nodeColor((node) => {
+              const baseColor = stringToColor(node.tag[0]);
+              // Make the active node glow with a brighter, more saturated color
+              if (node.id === this.activeId) {
+                // Convert hex to RGB and increase brightness/saturation
+                const hex = baseColor.replace("#", "");
+                const r = Math.min(255, parseInt(hex.substr(0, 2), 16) + 80);
+                const g = Math.min(255, parseInt(hex.substr(2, 2), 16) + 80);
+                const b = Math.min(255, parseInt(hex.substr(4, 2), 16) + 80);
+                return `rgb(${r}, ${g}, ${b})`;
+              }
+              return baseColor;
+            })
             .nodeVal((n) => n.value || 4)
             .onNodeRightClick((node) => {
               this.loadConnections(node);
             })
             .nodeThreeObject((node) => {
+              // Create glowing effect for active node
+              if (node.id === this.activeId && !this.settings.title) {
+                const geometry = new THREE.SphereGeometry(10);
+                const baseColor = stringToColor(node.tag[0]);
+
+                // Create a glowing material
+                const material = new THREE.MeshBasicMaterial({
+                  color: baseColor,
+                  transparent: true,
+                  opacity: 0.8,
+                });
+
+                const sphere = new THREE.Mesh(geometry, material);
+
+                // Add a larger, more transparent outer glow
+                const glowGeometry = new THREE.SphereGeometry(20);
+                const glowMaterial = new THREE.MeshBasicMaterial({
+                  color: baseColor,
+                  transparent: true,
+                  opacity: 0.3,
+                  side: THREE.BackSide,
+                });
+                const glowSphere = new THREE.Mesh(glowGeometry, glowMaterial);
+
+                const group = new THREE.Group();
+                group.add(sphere);
+                group.add(glowSphere);
+
+                return group;
+              }
+
               if (this.settings.title) {
                 const nodeEl = document.createElement("span");
                 nodeEl.textContent =
                   node.title.length <= 25 ? node.title : node.title.slice(0, 25) + "...";
                 nodeEl.style.color = stringToColor(node.tag[0]);
                 nodeEl.className = "node-label";
+
+                // Add glowing effect to label for active node
+                if (node.id === this.activeId) {
+                  nodeEl.style.textShadow = `0 0 10px ${stringToColor(
+                    node.tag[0]
+                  )}, 0 0 20px ${stringToColor(node.tag[0])}, 0 0 30px ${stringToColor(
+                    node.tag[0]
+                  )}`;
+                  nodeEl.style.fontWeight = "bold";
+                }
+
                 return new CSS2DObject(nodeEl);
               }
             })
@@ -268,8 +323,12 @@ export default {
       const url = new URL(window.location.href);
 
       if (!node) {
+        this.activeId = null;
         url.searchParams.delete("id");
         history.replaceState({}, "", url);
+
+        // Refresh graph to remove glowing effect
+        Graph.refresh();
         return;
       }
 
@@ -285,6 +344,9 @@ export default {
       }
 
       Graph.graphData(config);
+
+      // Refresh the graph to apply glowing effect to the new active node
+      Graph.refresh();
 
       this.article.content = node;
       this.article.show = true;
@@ -365,6 +427,9 @@ export default {
       }
 
       Graph.graphData({ nodes: newNodes, links: newLinks }); //.d3ReheatSimulation(); // optional: settle layout again
+
+      // Refresh the graph to apply glowing effect
+      Graph.refresh();
 
       this.updateCounters({ nodes: newNodes, links: newLinks });
 
@@ -674,5 +739,25 @@ ul {
   border-radius: 4px;
   background-color: rgba(0, 0, 0, 0.25);
   user-select: none;
+}
+
+/* Glowing animation for active nodes */
+@keyframes glow-pulse {
+  0% {
+    opacity: 0.8;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.05);
+  }
+  100% {
+    opacity: 0.8;
+    transform: scale(1);
+  }
+}
+
+.active-node-glow {
+  animation: glow-pulse 2s ease-in-out infinite;
 }
 </style>
