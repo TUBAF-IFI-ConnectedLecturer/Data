@@ -20,6 +20,7 @@
     "workbox-cli": "^7.1.0"
   },
   "dependencies": {
+    "@comunica/query-sparql": "^4.3.0",
     "@mdi/font": "^7.4.47",
     "3d-force-graph": "^1.78.4",
     "splitpanes": "^4.0.4",

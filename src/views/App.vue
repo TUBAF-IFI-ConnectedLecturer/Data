@@ -2,6 +2,7 @@
 import { Splitpanes, Pane } from "splitpanes";
 import "splitpanes/dist/splitpanes.css";
 import * as THREE from "three";
+import SparqlDemo from "../components/SparqlDemo.vue";
 
 import { VRButton } from "../../node_modules/three/examples/jsm/webxr/VRButton.js";
 //import ForceGraph3D from "3d-force-graph";
@@ -37,7 +38,7 @@ var database: { nodes: Node[]; links: Link[] } = {
 export default {
   name: "App",
 
-  components: { Splitpanes, Pane },
+  components: { Splitpanes, Pane, SparqlDemo },
 
   data() {
     return {
@@ -50,6 +51,7 @@ export default {
 
       open: {
         description: false,
+        sparql: false,
       },
 
       split: "both",
@@ -520,6 +522,11 @@ export default {
                 @click="open.description = true"
               />
               <v-list-item
+                title="SPARQL Queries"
+                prepend-icon="mdi-database-search"
+                @click="open.sparql = true"
+              />
+              <v-list-item
                 :title="
                   settings.title ? 'Titel im Graph ausblenden' : 'Titel im Graph zeigen'
                 "
@@ -694,6 +701,18 @@ export default {
         OPAL-Systems. Jeder <i>Knoten</i> stellt einen OER-Inhalt dar und jede Kante eine
         Ähnlichkeitsbeziehung zwischen den Beiträgen.
       </v-card-text>
+    </v-card>
+  </v-dialog>
+
+  <v-dialog v-model="open.sparql" fullscreen>
+    <v-card>
+      <v-toolbar dark color="primary">
+        <v-btn icon @click="open.sparql = false">
+          <v-icon>mdi-close</v-icon>
+        </v-btn>
+        <v-toolbar-title>SPARQL Query Interface - OER Dataset</v-toolbar-title>
+      </v-toolbar>
+      <SparqlDemo />
     </v-card>
   </v-dialog>
 </template>
