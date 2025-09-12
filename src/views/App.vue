@@ -2,7 +2,7 @@
 import { Splitpanes, Pane } from "splitpanes";
 import "splitpanes/dist/splitpanes.css";
 import * as THREE from "three";
-import SparqlDemo from "../components/SparqlDemo.vue";
+import { sparqlEngine } from "../utils/sparqlEngine";
 
 import { VRButton } from "../../node_modules/three/examples/jsm/webxr/VRButton.js";
 //import ForceGraph3D from "3d-force-graph";
@@ -38,7 +38,7 @@ var database: { nodes: Node[]; links: Link[] } = {
 export default {
   name: "App",
 
-  components: { Splitpanes, Pane, SparqlDemo },
+  components: { Splitpanes, Pane },
 
   data() {
     return {
@@ -51,7 +51,6 @@ export default {
 
       open: {
         description: false,
-        sparql: false,
       },
 
       split: "both",
@@ -66,6 +65,397 @@ export default {
         show: false,
         content: null,
       },
+
+      // SPARQL filtering state
+      sparqlFilters: {
+        active: false,
+        data: [] as Node[],
+        originalData: null as { nodes: Node[]; links: Link[] } | null,
+        currentQuery: "",
+        loading: false,
+        error: null as string | null,
+      },
+
+      // SPARQL interface state
+      showSparqlInterface: true,
+      selectedPresetQuery: null as string | null,
+      customSparqlQuery: "",
+
+      // Search mode: 'normal' or 'sparql'
+      searchMode: "normal",
+
+      // Separate active ID for SPARQL mode to avoid conflicts
+      activeSparqlId: null as string | null,
+
+      // SPARQL menu options
+      sparqlQueries: [
+        {
+          name: "All Learning Resources",
+          key: "all",
+          query: `PREFIX dcterms: <http://purl.org/dc/terms/>
+PREFIX edu: <http://example.org/education/>
+
+SELECT ?resource ?title ?creator ?type ?format ?subject WHERE {
+  ?resource a edu:LearningResource ;
+            dcterms:title ?title .
+  OPTIONAL { ?resource dcterms:creator ?creator }
+  OPTIONAL { ?resource dcterms:type ?type }
+  OPTIONAL { ?resource dcterms:format ?format }
+  OPTIONAL { ?resource dcterms:subject ?subject }
+} LIMIT 100`,
+        },
+        {
+          name: "Resources with Similarity Links",
+          key: "similar",
+          query: `PREFIX dcterms: <http://purl.org/dc/terms/>
+PREFIX edu: <http://example.org/education/>
+PREFIX sim: <http://example.org/similarity/>
+
+SELECT ?resource ?title ?creator ?similar ?similarTitle WHERE {
+  ?resource a edu:LearningResource ;
+            dcterms:title ?title ;
+            sim:similarTo ?similar .
+  ?similar dcterms:title ?similarTitle .
+  OPTIONAL { ?resource dcterms:creator ?creator }
+} LIMIT 50`,
+        },
+        {
+          name: "Database & SQL Resources",
+          key: "databases",
+          query: `PREFIX dcterms: <http://purl.org/dc/terms/>
+PREFIX edu: <http://example.org/education/>
+
+SELECT ?resource ?title ?creator ?type ?subject WHERE {
+  ?resource a edu:LearningResource ;
+            dcterms:title ?title ;
+            dcterms:subject ?subject .
+  FILTER(CONTAINS(LCASE(STR(?subject)), "datenbank") || 
+         CONTAINS(LCASE(STR(?subject)), "sql") ||
+         CONTAINS(LCASE(STR(?title)), "datenbank") ||
+         CONTAINS(LCASE(STR(?title)), "sql"))
+  OPTIONAL { ?resource dcterms:creator ?creator }
+  OPTIONAL { ?resource dcterms:type ?type }
+}`,
+        },
+        {
+          name: "Programming & Computer Science",
+          key: "programming",
+          query: `PREFIX dcterms: <http://purl.org/dc/terms/>
+PREFIX edu: <http://example.org/education/>
+
+SELECT ?resource ?title ?creator ?type ?subject WHERE {
+  ?resource a edu:LearningResource ;
+            dcterms:title ?title ;
+            dcterms:subject ?subject .
+  FILTER(CONTAINS(LCASE(STR(?subject)), "informatik") || 
+         CONTAINS(LCASE(STR(?subject)), "programming") ||
+         CONTAINS(LCASE(STR(?subject)), "programmierung") ||
+         CONTAINS(LCASE(STR(?subject)), "algorithmen") ||
+         CONTAINS(LCASE(STR(?subject)), "python") ||
+         CONTAINS(LCASE(STR(?subject)), "java"))
+  OPTIONAL { ?resource dcterms:creator ?creator }
+  OPTIONAL { ?resource dcterms:type ?type }
+}`,
+        },
+        {
+          name: "Mathematics Resources",
+          key: "mathematics",
+          query: `PREFIX dcterms: <http://purl.org/dc/terms/>
+PREFIX edu: <http://example.org/education/>
+
+SELECT ?resource ?title ?creator ?type ?subject WHERE {
+  ?resource a edu:LearningResource ;
+            dcterms:title ?title ;
+            dcterms:subject ?subject .
+  FILTER(CONTAINS(LCASE(STR(?subject)), "mathematik") || 
+         CONTAINS(LCASE(STR(?subject)), "mathe") ||
+         CONTAINS(LCASE(STR(?title)), "mathematik") ||
+         CONTAINS(LCASE(STR(?subject)), "algebra") ||
+         CONTAINS(LCASE(STR(?subject)), "funktionen"))
+  OPTIONAL { ?resource dcterms:creator ?creator }
+  OPTIONAL { ?resource dcterms:type ?type }
+}`,
+        },
+        {
+          name: "PDF Documents",
+          key: "pdf",
+          query: `PREFIX dcterms: <http://purl.org/dc/terms/>
+PREFIX edu: <http://example.org/education/>
+
+SELECT ?resource ?title ?creator ?type ?format WHERE {
+  ?resource a edu:LearningResource ;
+            dcterms:title ?title ;
+            dcterms:format ?format .
+  FILTER(?format = "pdf" || ?format = "application/pdf")
+  OPTIONAL { ?resource dcterms:creator ?creator }
+  OPTIONAL { ?resource dcterms:type ?type }
+} LIMIT 50`,
+        },
+        {
+          name: "Physics & Engineering",
+          key: "physics",
+          query: `PREFIX dcterms: <http://purl.org/dc/terms/>
+PREFIX edu: <http://example.org/education/>
+
+SELECT ?resource ?title ?creator ?type ?subject WHERE {
+  ?resource a edu:LearningResource ;
+            dcterms:title ?title ;
+            dcterms:subject ?subject .
+  FILTER(CONTAINS(LCASE(STR(?subject)), "physik") || 
+         CONTAINS(LCASE(STR(?subject)), "ingenieur") ||
+         CONTAINS(LCASE(STR(?subject)), "technik") ||
+         CONTAINS(LCASE(STR(?subject)), "elektrotechnik") ||
+         CONTAINS(LCASE(STR(?title)), "physik"))
+  OPTIONAL { ?resource dcterms:creator ?creator }
+  OPTIONAL { ?resource dcterms:type ?type }
+}`,
+        },
+        {
+          name: "Office Documents (Word, PowerPoint, Excel)",
+          key: "office",
+          query: `PREFIX dcterms: <http://purl.org/dc/terms/>
+PREFIX edu: <http://example.org/education/>
+
+SELECT ?resource ?title ?creator ?type ?format WHERE {
+  ?resource a edu:LearningResource ;
+            dcterms:title ?title ;
+            dcterms:format ?format .
+  FILTER(?format = "docx" || ?format = "pptx" || ?format = "xlsx" ||
+         ?format = "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
+         ?format = "application/vnd.openxmlformats-officedocument.presentationml.presentation")
+  OPTIONAL { ?resource dcterms:creator ?creator }
+  OPTIONAL { ?resource dcterms:type ?type }
+} LIMIT 30`,
+        },
+        {
+          name: "Resources by Specific Publishers",
+          key: "publishers",
+          query: `PREFIX dcterms: <http://purl.org/dc/terms/>
+PREFIX edu: <http://example.org/education/>
+
+SELECT ?resource ?title ?creator ?publisher ?type WHERE {
+  ?resource a edu:LearningResource ;
+            dcterms:title ?title ;
+            dcterms:publisher ?publisher .
+  OPTIONAL { ?resource dcterms:creator ?creator }
+  OPTIONAL { ?resource dcterms:type ?type }
+} LIMIT 50`,
+        },
+        {
+          name: "TU Dresden Resources",
+          key: "tu_dresden",
+          query: `PREFIX dcterms: <http://purl.org/dc/terms/>
+PREFIX edu: <http://example.org/education/>
+
+SELECT ?resource ?title ?creator ?publisher ?subject WHERE {
+  ?resource a edu:LearningResource ;
+            dcterms:title ?title ;
+            dcterms:publisher ?publisher .
+  FILTER(CONTAINS(LCASE(STR(?publisher)), "dresden") || 
+         CONTAINS(LCASE(STR(?publisher)), "tu_dresden"))
+  OPTIONAL { ?resource dcterms:creator ?creator }
+  OPTIONAL { ?resource dcterms:subject ?subject }
+}`,
+        },
+        {
+          name: "Chemistry & Biology",
+          key: "chemistry",
+          query: `PREFIX dcterms: <http://purl.org/dc/terms/>
+PREFIX edu: <http://example.org/education/>
+
+SELECT ?resource ?title ?creator ?type ?subject WHERE {
+  ?resource a edu:LearningResource ;
+            dcterms:title ?title ;
+            dcterms:subject ?subject .
+  FILTER(CONTAINS(LCASE(STR(?subject)), "chemie") || 
+         CONTAINS(LCASE(STR(?subject)), "biologie") ||
+         CONTAINS(LCASE(STR(?subject)), "biochemie") ||
+         CONTAINS(LCASE(STR(?title)), "chemie") ||
+         CONTAINS(LCASE(STR(?subject)), "photosynthese"))
+  OPTIONAL { ?resource dcterms:creator ?creator }
+  OPTIONAL { ?resource dcterms:type ?type }
+}`,
+        },
+        {
+          name: "Lecture Materials & Tutorials",
+          key: "lectures",
+          query: `PREFIX dcterms: <http://purl.org/dc/terms/>
+PREFIX edu: <http://example.org/education/>
+
+SELECT ?resource ?title ?creator ?type ?subject WHERE {
+  ?resource a edu:LearningResource ;
+            dcterms:title ?title ;
+            dcterms:type ?type .
+  FILTER(CONTAINS(LCASE(STR(?type)), "vorlesungsfolien") ||
+         CONTAINS(LCASE(STR(?type)), "tutorial") ||
+         CONTAINS(LCASE(STR(?type)), "skript"))
+  OPTIONAL { ?resource dcterms:creator ?creator }
+  OPTIONAL { ?resource dcterms:subject ?subject }
+} LIMIT 50`,
+        },
+        {
+          name: "Find Resources Similar to a Given One",
+          key: "similarity_network",
+          query: `PREFIX dcterms: <http://purl.org/dc/terms/>
+PREFIX edu: <http://example.org/education/>
+PREFIX sim: <http://example.org/similarity/>
+
+SELECT ?resource ?title ?similar1 ?title1 ?similar2 ?title2 WHERE {
+  ?resource a edu:LearningResource ;
+            dcterms:title ?title ;
+            sim:similarTo ?similar1 .
+  ?similar1 dcterms:title ?title1 ;
+            sim:similarTo ?similar2 .
+  ?similar2 dcterms:title ?title2 .
+  FILTER(?resource != ?similar2)
+} LIMIT 30`,
+        },
+        {
+          name: "Resources with Rich Descriptions",
+          key: "described",
+          query: `PREFIX dcterms: <http://purl.org/dc/terms/>
+PREFIX edu: <http://example.org/education/>
+
+SELECT ?resource ?title ?creator ?description (GROUP_CONCAT(DISTINCT ?subject; separator=", ") as ?subjects) WHERE {
+  ?resource a edu:LearningResource ;
+            dcterms:title ?title ;
+            dcterms:description ?description .
+  FILTER(STRLEN(?description) > 100)
+  OPTIONAL { ?resource dcterms:creator ?creator }
+  OPTIONAL { ?resource dcterms:subject ?subject }
+}
+GROUP BY ?resource ?title ?creator ?description
+LIMIT 40`,
+        },
+        {
+          name: "Machine Learning & AI Resources",
+          key: "ai_ml",
+          query: `PREFIX dcterms: <http://purl.org/dc/terms/>
+PREFIX edu: <http://example.org/education/>
+
+SELECT ?resource ?title ?creator ?type ?subject WHERE {
+  ?resource a edu:LearningResource ;
+            dcterms:title ?title ;
+            dcterms:subject ?subject .
+  FILTER(CONTAINS(LCASE(STR(?subject)), "künstliche_intelligenz") || 
+         CONTAINS(LCASE(STR(?subject)), "machine_learning") ||
+         CONTAINS(LCASE(STR(?subject)), "neuronale_netze") ||
+         CONTAINS(LCASE(STR(?subject)), "ki-") ||
+         CONTAINS(LCASE(STR(?title)), "intelligenz"))
+  OPTIONAL { ?resource dcterms:creator ?creator }
+  OPTIONAL { ?resource dcterms:type ?type }
+}`,
+        },
+        {
+          name: "Find Similar Resources to Specific ID",
+          key: "similar_to_id",
+          query: `PREFIX dcterms: <http://purl.org/dc/terms/>
+PREFIX edu: <http://example.org/education/>
+PREFIX sim: <http://example.org/similarity/>
+PREFIX oer: <http://example.org/oer/>
+
+SELECT ?resource ?title ?creator ?type ?subject WHERE {
+  {
+    # Find resources that the given ID is similar to
+    oer:YOUR_ID_HERE sim:similarTo ?resource .
+    ?resource dcterms:title ?title .
+    OPTIONAL { ?resource dcterms:creator ?creator }
+    OPTIONAL { ?resource dcterms:type ?type }
+    OPTIONAL { ?resource dcterms:subject ?subject }
+  }
+  UNION
+  {
+    # Also find resources that point to the given ID as similar
+    ?resource sim:similarTo oer:YOUR_ID_HERE ;
+              dcterms:title ?title .
+    OPTIONAL { ?resource dcterms:creator ?creator }
+    OPTIONAL { ?resource dcterms:type ?type }
+    OPTIONAL { ?resource dcterms:subject ?subject }
+  }
+  UNION
+  {
+    # Include the original resource itself
+    BIND(oer:YOUR_ID_HERE as ?resource)
+    ?resource dcterms:title ?title .
+    OPTIONAL { ?resource dcterms:creator ?creator }
+    OPTIONAL { ?resource dcterms:type ?type }
+    OPTIONAL { ?resource dcterms:subject ?subject }
+  }
+} LIMIT 100`,
+        },
+        {
+          name: "Two-Hop Similarity Network from ID",
+          key: "two_hop_similarity",
+          query: `PREFIX dcterms: <http://purl.org/dc/terms/>
+PREFIX edu: <http://example.org/education/>
+PREFIX sim: <http://example.org/similarity/>
+PREFIX oer: <http://example.org/education/resource/>
+
+SELECT DISTINCT ?resource ?title ?creator ?distance WHERE {
+  {
+    # Direct similarity (distance 1)
+    oer:YOUR_ID_HERE sim:similarTo ?resource .
+    ?resource dcterms:title ?title .
+    BIND("1" as ?distance)
+  }
+  UNION
+  {
+    # Reverse direct similarity (distance 1)
+    ?resource sim:similarTo oer:YOUR_ID_HERE ;
+              dcterms:title ?title .
+    BIND("1" as ?distance)
+  }
+  UNION
+  {
+    # Two-hop similarity (distance 2)
+    oer:YOUR_ID_HERE sim:similarTo ?intermediate .
+    ?intermediate sim:similarTo ?resource .
+    ?resource dcterms:title ?title .
+    FILTER(?resource != oer:YOUR_ID_HERE)
+    BIND("2" as ?distance)
+  }
+  UNION
+  {
+    # Two-hop similarity reverse (distance 2)
+    ?intermediate sim:similarTo oer:YOUR_ID_HERE .
+    ?resource sim:similarTo ?intermediate ;
+              dcterms:title ?title .
+    FILTER(?resource != oer:YOUR_ID_HERE)
+    BIND("2" as ?distance)
+  }
+  OPTIONAL { ?resource dcterms:creator ?creator }
+} ORDER BY ?distance LIMIT 100`,
+        },
+        {
+          name: "Similarity by Subject Overlap",
+          key: "subject_similarity",
+          query: `PREFIX dcterms: <http://purl.org/dc/terms/>
+PREFIX edu: <http://example.org/education/>
+PREFIX oer: <http://example.org/education/resource/>
+
+SELECT ?resource ?title ?creator ?sharedSubjects (COUNT(?sharedSubject) as ?subjectOverlap) WHERE {
+  # Replace 'YOUR_ID_HERE' with the actual resource ID
+  oer:YOUR_ID_HERE dcterms:subject ?sharedSubject .
+  ?resource dcterms:subject ?sharedSubject ;
+            dcterms:title ?title .
+  FILTER(?resource != oer:YOUR_ID_HERE)
+  OPTIONAL { ?resource dcterms:creator ?creator }
+  
+  # Count how many subjects they have in common
+  {
+    SELECT ?resource (GROUP_CONCAT(?sharedSubject; separator=", ") as ?sharedSubjects) WHERE {
+      oer:YOUR_ID_HERE dcterms:subject ?sharedSubject .
+      ?resource dcterms:subject ?sharedSubject .
+      FILTER(?resource != oer:YOUR_ID_HERE)
+    }
+    GROUP BY ?resource
+  }
+}
+GROUP BY ?resource ?title ?creator ?sharedSubjects
+HAVING(COUNT(?sharedSubject) >= 3)  # Minimum 3 shared subjects as threshold
+ORDER BY DESC(?subjectOverlap) LIMIT 50`,
+        },
+      ],
 
       resizeObserver: new ResizeObserver(() => {
         this.handleResize();
@@ -326,6 +716,7 @@ export default {
 
       if (!node) {
         this.activeId = null;
+        this.activeSparqlId = null;
         url.searchParams.delete("id");
         history.replaceState({}, "", url);
 
@@ -334,7 +725,107 @@ export default {
         return;
       }
 
+      // Handle clicking on graph nodes in SPARQL mode
+      if (this.searchMode === "sparql" && this.sparqlFilters.active) {
+        // Find the corresponding SPARQL result item
+        const sparqlItem = this.sparqlFilters.data.find((item: any) => {
+          const originalId = item.resource?.value?.split("/").pop() || item.id;
+          return originalId === node.id;
+        });
+
+        if (sparqlItem) {
+          // Find the corresponding item in visibleNodes to get the SPARQL ID
+          const visibleItem = this.visibleNodes.find(
+            (item: any) => item.originalId === node.id
+          );
+
+          if (visibleItem) {
+            this.activeSparqlId = visibleItem.id;
+            this.activeId = node.id; // Keep for graph highlighting
+
+            // Update graph highlighting
+            const config = Graph.graphData();
+            for (let i = 0; i < config.nodes.length; i++) {
+              config.nodes[i].value = config.nodes[i].id === node.id ? 70 : 4;
+            }
+            Graph.graphData(config);
+            Graph.refresh();
+
+            this.article.content = visibleItem;
+            this.article.show = true;
+
+            // Handle scrolling to the card in the list
+            if (this.split !== "graph" && scroll) {
+              const index = this.visibleNodes.findIndex(
+                (n: any) => n.id === visibleItem.id
+              );
+              if (index >= 0) {
+                this.$nextTick(() =>
+                  requestAnimationFrame(() => {
+                    this.$refs.list.scrollToIndex(index);
+                  })
+                );
+              }
+            }
+
+            url.searchParams.set("id", node.id);
+            history.replaceState({}, "", url);
+            return;
+          }
+        }
+      }
+
+      // Handle SPARQL mode card clicks (existing logic)
+      if (this.searchMode === "sparql" && node.id?.startsWith("sparql_")) {
+        this.activeSparqlId = node.id;
+        this.activeId = null; // Clear normal mode active ID
+
+        // Find the corresponding node in the filtered graph using originalId
+        const originalId = (node as any).originalId;
+        if (originalId) {
+          const config = Graph.graphData();
+
+          // Find the node in the current graph data
+          const graphNode = config.nodes.find((n: any) => n.id === originalId);
+          if (graphNode) {
+            // Update graph highlighting
+            for (let i = 0; i < config.nodes.length; i++) {
+              config.nodes[i].value = config.nodes[i].id === originalId ? 70 : 4;
+            }
+
+            Graph.graphData(config);
+            Graph.refresh();
+
+            // Set activeId for graph synchronization
+            this.activeId = originalId;
+          }
+        }
+
+        this.article.content = node;
+        this.article.show = true;
+
+        // Handle scrolling in SPARQL mode
+        if (this.split !== "graph" && scroll) {
+          const index = this.visibleNodes.findIndex((n: any) => n.id === node.id);
+          if (index >= 0) {
+            this.$nextTick(() =>
+              requestAnimationFrame(() => {
+                this.$refs.list.scrollToIndex(index);
+              })
+            );
+          }
+        }
+
+        // Set URL to the original ID if available
+        const urlId = (node as any).originalId || node.id;
+        url.searchParams.set("id", urlId);
+        history.replaceState({}, "", url);
+        return;
+      }
+
+      // Normal mode handling
       this.activeId = node.id;
+      this.activeSparqlId = null; // Clear SPARQL mode active ID
       url.searchParams.set("id", this.activeId);
       history.replaceState({}, "", url);
 
@@ -463,6 +954,234 @@ export default {
       Graph.resumeAnimation();
       Graph.d3ReheatSimulation();
     },
+
+    // SPARQL filtering methods
+    async executeSparqlQuery(queryConfig: any) {
+      console.log("Executing SPARQL query:", queryConfig.name);
+
+      // Load the preset query into the custom query field
+      this.customSparqlQuery = queryConfig.query;
+
+      // Set the selected preset by key
+      this.selectedPresetQuery = queryConfig.key;
+
+      // Execute the query
+      await this.executeCustomSparqlQuery();
+    },
+
+    clearSparqlFilters() {
+      console.log("Clearing SPARQL filters");
+
+      // Show empty graph instead of all data
+      const emptyGraphData = { nodes: [], links: [] };
+      Graph.graphData(emptyGraphData);
+      this.updateCounters(emptyGraphData);
+
+      // Clear filter state
+      this.sparqlFilters.active = false;
+      this.sparqlFilters.data = [];
+      this.sparqlFilters.currentQuery = "";
+      this.sparqlFilters.loading = false;
+      this.sparqlFilters.error = null; // Clear errors
+      this.sparqlFilters.originalData = null; // Reset original data reference
+      this.selectedPresetQuery = null;
+      this.customSparqlQuery = "";
+      this.activeSparqlId = null;
+
+      Graph.resumeAnimation();
+    },
+
+    // SPARQL Interface Methods
+    toggleSparqlInterface() {
+      this.showSparqlInterface = !this.showSparqlInterface;
+    },
+
+    loadPresetQuery(index: number) {
+      if (index !== null && this.sparqlQueries[index]) {
+        this.customSparqlQuery = this.sparqlQueries[index].query;
+      }
+    },
+
+    loadPresetQueryByKey(key: string) {
+      if (key) {
+        const query = this.sparqlQueries.find((q) => q.key === key);
+        if (query) {
+          this.customSparqlQuery = query.query;
+        }
+      }
+    },
+
+    async executeCustomSparqlQuery() {
+      if (!this.customSparqlQuery.trim()) {
+        console.warn("No SPARQL query provided");
+        return;
+      }
+
+      console.log("Executing custom SPARQL query");
+
+      this.sparqlFilters.loading = true;
+      this.sparqlFilters.error = null; // Clear previous errors
+
+      try {
+        // Execute the custom SPARQL query
+        const results = await sparqlEngine.executeSelectQuery(this.customSparqlQuery);
+        console.log("Custom SPARQL results:", results);
+
+        if (results && results.length > 0) {
+          // Store original data if not already stored
+          if (!this.sparqlFilters.originalData) {
+            this.sparqlFilters.originalData = { ...database };
+          }
+
+          // Map SPARQL results to existing node format
+          const sparqlNodeIds = new Set(
+            results
+              .map((item: any) => item.resource?.value?.split("/").pop() || item.id)
+              .filter((id: string) => id) // Remove empty IDs
+          );
+
+          // Filter nodes that exist in both SPARQL results and original database
+          const filteredNodes = database.nodes.filter((node) =>
+            sparqlNodeIds.has(node.id)
+          );
+
+          // Filter links to only include connections between filtered nodes
+          const filteredNodeIds = new Set(filteredNodes.map((n) => n.id));
+          const filteredLinks = database.links.filter((link) => {
+            const sourceId =
+              typeof link.source === "object" ? link.source.id : link.source;
+            const targetId =
+              typeof link.target === "object" ? link.target.id : link.target;
+            return filteredNodeIds.has(sourceId) && filteredNodeIds.has(targetId);
+          });
+
+          // Update graph with filtered data
+          const graphData = {
+            nodes: resetNodePositions(filteredNodes),
+            links: filteredLinks,
+          };
+
+          Graph.graphData(graphData)
+            .cooldownTicks(100)
+            .d3ReheatSimulation()
+            .zoomToFit(600, 40);
+
+          // Update counters and state
+          this.updateCounters(graphData);
+          this.sparqlFilters.active = true;
+          this.sparqlFilters.data = results;
+
+          // Determine if this is a preset query or custom
+          const matchingPreset = this.sparqlQueries.find(
+            (q) => q.query.trim() === this.customSparqlQuery.trim()
+          );
+          this.sparqlFilters.currentQuery = matchingPreset
+            ? matchingPreset.key
+            : "custom";
+
+          Graph.resumeAnimation();
+
+          console.log(`Applied custom SPARQL filter (${filteredNodes.length} nodes)`);
+        } else {
+          console.warn("No results found for custom SPARQL query");
+          this.sparqlFilters.error =
+            "No results found for this SPARQL query. Please check your query syntax and try again.";
+        }
+      } catch (error) {
+        console.error("Error executing custom SPARQL query:", error);
+
+        // Extract meaningful error message
+        let errorMessage = "Unknown error occurred while executing SPARQL query.";
+
+        if (error instanceof Error) {
+          errorMessage = error.message;
+        } else if (typeof error === "string") {
+          errorMessage = error;
+        } else if (error && typeof error === "object" && "message" in error) {
+          errorMessage = error.message;
+        }
+
+        // Store the error for display
+        this.sparqlFilters.error = `SPARQL Query Error: ${errorMessage}`;
+      } finally {
+        this.sparqlFilters.loading = false;
+      }
+    },
+
+    handleSparqlFilterApplied(sparqlData: Node[]) {
+      console.log("SPARQL filter applied:", sparqlData);
+
+      // Store original data if not already stored
+      if (!this.sparqlFilters.originalData) {
+        this.sparqlFilters.originalData = { ...database };
+      }
+
+      // Map SPARQL results to existing node IDs
+      const sparqlNodeIds = new Set(
+        sparqlData.map((item) => item.id).filter((id) => id) // Remove empty IDs
+      );
+
+      // Filter nodes that exist in both SPARQL results and original database
+      const filteredNodes = database.nodes.filter((node) => sparqlNodeIds.has(node.id));
+
+      // Filter links to only include connections between filtered nodes
+      const filteredNodeIds = new Set(filteredNodes.map((n) => n.id));
+      const filteredLinks = database.links.filter((link) => {
+        const sourceId = typeof link.source === "object" ? link.source.id : link.source;
+        const targetId = typeof link.target === "object" ? link.target.id : link.target;
+        return filteredNodeIds.has(sourceId) && filteredNodeIds.has(targetId);
+      });
+
+      // Update graph with filtered data
+      const graphData = {
+        nodes: resetNodePositions(filteredNodes),
+        links: filteredLinks,
+      };
+
+      Graph.graphData(graphData)
+        .cooldownTicks(100)
+        .d3ReheatSimulation()
+        .zoomToFit(600, 40);
+
+      // Update counters and state
+      this.updateCounters(graphData);
+      this.sparqlFilters.active = true;
+      this.sparqlFilters.data = sparqlData;
+
+      Graph.resumeAnimation();
+    },
+
+    handleSparqlItemSelected(item: any) {
+      console.log("SPARQL item selected:", item);
+
+      // Find the corresponding node in the graph
+      const nodeId = item.resource?.value?.split("/").pop() || item.id;
+      const node = Graph.graphData().nodes.find((n: Node) => n.id === nodeId);
+
+      if (node) {
+        this.showArticle(node, true);
+        this.open.sparql = false; // Close modal
+      }
+    },
+
+    handleSparqlFiltersCleared() {
+      console.log("SPARQL filters cleared");
+
+      // Restore original data
+      if (this.sparqlFilters.originalData) {
+        Graph.graphData(this.sparqlFilters.originalData)
+          .d3ReheatSimulation()
+          .zoomToFit(600, 40);
+
+        this.updateCounters(this.sparqlFilters.originalData);
+      }
+
+      // Clear filter state
+      this.sparqlFilters.active = false;
+      this.sparqlFilters.data = [];
+
+      Graph.resumeAnimation();
+    },
   },
 
   computed: {
@@ -471,7 +1190,57 @@ export default {
       this.version;
 
       if (!Graph) return [];
+
+      // Return SPARQL data in the list if filters are active
+      if (this.sparqlFilters.active && this.sparqlFilters.data.length > 0) {
+        // Convert SPARQL data to display format for the list
+        return this.sparqlFilters.data.map((item, index) => ({
+          id: `sparql_${index}_${
+            item.resource?.value?.split("/").pop() || item.id || "unknown"
+          }`,
+          title: item.title?.value || "Untitled",
+          type: item.type?.value?.split("/").pop() || "Unknown",
+          file: item.format?.value || "unknown",
+          affiliation: item.creator?.value?.split("/").pop() || "",
+          summary:
+            item.description?.value ||
+            item.subjects?.value ||
+            item.subject?.value?.split("/").pop() ||
+            "",
+          authors: item.creator?.value?.split("/").pop() || "",
+          tag: item.subjects?.value
+            ? item.subjects.value
+                .split(", ")
+                .map((s) => s.split("/").pop())
+                .filter(Boolean)
+            : item.subject?.value
+            ? [item.subject.value.split("/").pop()]
+            : ["Unknown"],
+          sparqlData: item,
+          originalId: item.resource?.value?.split("/").pop() || item.id,
+        }));
+      }
+
       return Graph.graphData().nodes;
+    },
+  },
+
+  watch: {
+    searchMode(newMode, oldMode) {
+      // Clear SPARQL filters when switching to normal search mode
+      if (newMode === "normal" && oldMode === "sparql" && this.sparqlFilters.active) {
+        this.clearSparqlFilters();
+      }
+
+      // Clear active selections when switching modes
+      if (newMode === "normal") {
+        this.activeSparqlId = null;
+        // Keep activeId for graph highlighting
+      } else if (newMode === "sparql") {
+        // Keep activeId for potential graph highlighting
+        // Clear activeSparqlId to start fresh
+        this.activeSparqlId = null;
+      }
     },
   },
 
@@ -492,11 +1261,15 @@ export default {
       <v-app-bar density="compact" class="flex-shrink-0">
         <template v-slot:prepend> </template>
 
-        <v-app-bar-title
-          >OER-Graph (<span ref="nodes">0</span>/<span ref="links">0</span>)
+        <v-app-bar-title>
+          OER-Graph (<span ref="nodes">0</span>/<span ref="links">0</span>)
+          <v-chip v-if="sparqlFilters.active" color="accent" size="small" class="ml-2">
+            SPARQL Filtered
+          </v-chip>
         </v-app-bar-title>
         <v-spacer />
         <v-text-field
+          v-show="searchMode === 'normal'"
           :loading="search.loading"
           v-model="search.text"
           append-inner-icon="mdi-magnify"
@@ -510,6 +1283,18 @@ export default {
         ></v-text-field>
         <v-spacer />
         <template v-slot:append>
+          <!-- Search Mode Toggle -->
+          <v-btn-toggle
+            v-model="searchMode"
+            density="compact"
+            variant="outlined"
+            mandatory
+            class="mr-2"
+          >
+            <v-btn value="normal" size="small" icon="mdi-magnify" />
+            <v-btn value="sparql" size="small" icon="mdi-database-search" />
+          </v-btn-toggle>
+
           <v-menu>
             <template v-slot:activator="{ props }">
               <v-btn icon="mdi-dots-vertical" v-bind="props"></v-btn>
@@ -520,11 +1305,6 @@ export default {
                 title="Beschreibung"
                 prepend-icon="mdi-information-outline"
                 @click="open.description = true"
-              />
-              <v-list-item
-                title="SPARQL Queries"
-                prepend-icon="mdi-database-search"
-                @click="open.sparql = true"
               />
               <v-list-item
                 :title="
@@ -578,9 +1358,24 @@ export default {
                 @click="article.show = false"
               />
               <v-card-item style="margin-top: 1rem">
-                <v-card-title class="no-ellipsis">
-                  {{ article.content?.title }}
-                </v-card-title>
+                <div class="d-flex justify-space-between align-start mb-2">
+                  <v-card-title class="no-ellipsis pa-0">
+                    {{ article.content?.title }}
+                  </v-card-title>
+                  <v-chip
+                    size="small"
+                    color="primary"
+                    variant="outlined"
+                    class="ml-2"
+                    style="font-family: monospace; flex-shrink: 0"
+                  >
+                    {{
+                      searchMode === "sparql" && article.content?.originalId
+                        ? article.content?.originalId
+                        : article.content?.id
+                    }}
+                  </v-chip>
+                </div>
 
                 <v-card-subtitle>
                   {{ article.content?.authors }}
@@ -626,24 +1421,173 @@ export default {
             :size="split === 'graph' ? 0 : split === 'both' ? 30 : 100"
             style="background-color: black"
           >
+            <!-- SPARQL Query Interface Header -->
+            <v-card
+              v-if="split !== 'graph' && searchMode === 'sparql'"
+              class="ma-2 mb-0"
+              style="background-color: #1e1e1e; border: 1px solid #333"
+            >
+              <v-card-title class="pb-2">
+                <v-icon color="accent" class="mr-2">mdi-database-search</v-icon>
+                SPARQL Query Interface
+                <v-spacer />
+                <v-chip v-if="sparqlFilters.active" color="accent" size="small">
+                  Active Filter
+                </v-chip>
+              </v-card-title>
+
+              <v-card-text class="pt-0" v-show="showSparqlInterface">
+                <!-- Predefined Query Dropdown -->
+                <div class="mb-3">
+                  <v-select
+                    v-model="selectedPresetQuery"
+                    :items="sparqlQueries"
+                    item-title="name"
+                    item-value="key"
+                    label="Select a predefined query"
+                    prepend-icon="mdi-database-search"
+                    variant="outlined"
+                    density="compact"
+                    clearable
+                    @update:model-value="loadPresetQueryByKey"
+                    class="mb-2"
+                  />
+                </div>
+
+                <!-- Custom Query Textarea -->
+                <v-textarea
+                  v-model="customSparqlQuery"
+                  label="Custom SPARQL Query"
+                  placeholder="PREFIX dcterms: <http://purl.org/dc/terms/>
+PREFIX edu: <http://example.org/education/>
+
+SELECT ?resource ?title ?creator WHERE {
+  ?resource a edu:LearningResource ;
+            dcterms:title ?title ;
+            dcterms:creator ?creator .
+} LIMIT 50"
+                  rows="8"
+                  variant="outlined"
+                  style="font-family: 'Courier New', monospace; background-color: #2d2d2d"
+                  hide-details
+                  density="compact"
+                />
+
+                <!-- Error Display -->
+                <v-alert
+                  v-if="sparqlFilters.error"
+                  type="error"
+                  variant="tonal"
+                  closable
+                  class="mt-3"
+                  @click:close="sparqlFilters.error = null"
+                >
+                  <v-alert-title>
+                    <v-icon class="mr-2">mdi-alert-circle</v-icon>
+                    Query Execution Failed
+                  </v-alert-title>
+                  <div
+                    class="mt-2"
+                    style="font-family: 'Courier New', monospace; font-size: 0.9em"
+                  >
+                    {{ sparqlFilters.error }}
+                  </div>
+                </v-alert>
+
+                <!-- Action Buttons -->
+                <div class="d-flex justify-space-between mt-3">
+                  <div>
+                    <v-btn
+                      @click="executeCustomSparqlQuery"
+                      :loading="sparqlFilters.loading"
+                      color="accent"
+                      variant="elevated"
+                      size="small"
+                      prepend-icon="mdi-play"
+                    >
+                      Execute Query
+                    </v-btn>
+
+                    <v-btn
+                      v-if="sparqlFilters.active"
+                      @click="clearSparqlFilters"
+                      color="error"
+                      variant="outlined"
+                      size="small"
+                      prepend-icon="mdi-close"
+                      class="ml-2"
+                    >
+                      Clear Filter
+                    </v-btn>
+                  </div>
+
+                  <div>
+                    <v-btn
+                      @click="toggleSparqlInterface"
+                      variant="text"
+                      size="small"
+                      :icon="showSparqlInterface ? 'mdi-chevron-up' : 'mdi-chevron-down'"
+                    />
+                  </div>
+                </div>
+              </v-card-text>
+            </v-card>
+
             <v-virtual-scroll
               :key="version"
               ref="list"
               :items="visibleNodes"
-              height="calc(100vh - 48px)"
+              :height="
+                split !== 'graph'
+                  ? searchMode === 'sparql'
+                    ? showSparqlInterface
+                      ? 'calc(100vh - 350px)'
+                      : 'calc(100vh - 120px)'
+                    : 'calc(100vh - 48px)'
+                  : 'calc(100vh - 48px)'
+              "
             >
               <template v-slot:default="{ item }">
                 <div class="pa-2">
                   <v-card
                     class="mx-auto"
-                    :style="item.id === this.activeId ? 'border: 2px solid orange' : ''"
+                    :class="{
+                      'border-accent':
+                        searchMode === 'sparql'
+                          ? item.id === this.activeSparqlId
+                          : item.id === this.activeId,
+                    }"
+                    :style="
+                      (
+                        searchMode === 'sparql'
+                          ? item.id === this.activeSparqlId
+                          : item.id === this.activeId
+                      )
+                        ? 'border: 2px solid orange'
+                        : ''
+                    "
                     hover
                     @click="showArticle(item)"
                   >
                     <v-card-item style="margin-top: 1rem">
-                      <v-card-title class="no-ellipsis">
-                        {{ item.title }}
-                      </v-card-title>
+                      <div class="d-flex justify-space-between align-start mb-2">
+                        <v-card-title class="no-ellipsis pa-0">
+                          {{ item.title }}
+                        </v-card-title>
+                        <v-chip
+                          size="small"
+                          color="primary"
+                          variant="outlined"
+                          class="ml-2"
+                          style="font-family: monospace; flex-shrink: 0"
+                        >
+                          {{
+                            searchMode === "sparql" && item.originalId
+                              ? item.originalId
+                              : item.id
+                          }}
+                        </v-chip>
+                      </div>
 
                       <v-card-subtitle>
                         {{ item.authors }}
@@ -670,7 +1614,13 @@ export default {
                         color="teal-accent-4"
                         text="Download"
                         variant="text"
-                        @click.stop="load(item.id)"
+                        @click.stop="
+                          load(
+                            searchMode === 'sparql' && item.originalId
+                              ? item.originalId
+                              : item.id
+                          )
+                        "
                       ></v-btn>
 
                       <v-btn
@@ -699,20 +1649,10 @@ export default {
       <v-card-text>
         Diese Karte zeigt das <i>Netzwerk</i> aller OER-Inhalte des sächsischen
         OPAL-Systems. Jeder <i>Knoten</i> stellt einen OER-Inhalt dar und jede Kante eine
-        Ähnlichkeitsbeziehung zwischen den Beiträgen.
+        Ähnlichkeitsbeziehung zwischen den Beiträgen. <br /><br />
+        <strong>SPARQL-Filter:</strong> Verwenden Sie die SPARQL-Abfrage-Oberfläche, um
+        die angezeigten Inhalte zu filtern und spezifische Lernressourcen zu finden.
       </v-card-text>
-    </v-card>
-  </v-dialog>
-
-  <v-dialog v-model="open.sparql" fullscreen>
-    <v-card>
-      <v-toolbar dark color="primary">
-        <v-btn icon @click="open.sparql = false">
-          <v-icon>mdi-close</v-icon>
-        </v-btn>
-        <v-toolbar-title>SPARQL Query Interface - OER Dataset</v-toolbar-title>
-      </v-toolbar>
-      <SparqlDemo />
     </v-card>
   </v-dialog>
 </template>
