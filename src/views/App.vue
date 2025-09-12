@@ -74,6 +74,7 @@ export default {
         currentQuery: "",
         loading: false,
         error: null as string | null,
+        abortController: null as AbortController | null,
       },
 
       // SPARQL interface state
@@ -102,7 +103,7 @@ SELECT ?resource ?title ?creator ?type ?format ?subject WHERE {
   OPTIONAL { ?resource dcterms:type ?type }
   OPTIONAL { ?resource dcterms:format ?format }
   OPTIONAL { ?resource dcterms:subject ?subject }
-} LIMIT 100`,
+} LIMIT 10`,
         },
         {
           name: "Resources with Similarity Links",
@@ -117,7 +118,7 @@ SELECT ?resource ?title ?creator ?similar ?similarTitle WHERE {
             sim:similarTo ?similar .
   ?similar dcterms:title ?similarTitle .
   OPTIONAL { ?resource dcterms:creator ?creator }
-} LIMIT 50`,
+} LIMIT 10`,
         },
         {
           name: "Database & SQL Resources",
@@ -135,7 +136,7 @@ SELECT ?resource ?title ?creator ?type ?subject WHERE {
          CONTAINS(LCASE(STR(?title)), "sql"))
   OPTIONAL { ?resource dcterms:creator ?creator }
   OPTIONAL { ?resource dcterms:type ?type }
-}`,
+} LIMIT 10`,
         },
         {
           name: "Programming & Computer Science",
@@ -155,7 +156,7 @@ SELECT ?resource ?title ?creator ?type ?subject WHERE {
          CONTAINS(LCASE(STR(?subject)), "java"))
   OPTIONAL { ?resource dcterms:creator ?creator }
   OPTIONAL { ?resource dcterms:type ?type }
-}`,
+} LIMIT 10`,
         },
         {
           name: "Mathematics Resources",
@@ -174,22 +175,54 @@ SELECT ?resource ?title ?creator ?type ?subject WHERE {
          CONTAINS(LCASE(STR(?subject)), "funktionen"))
   OPTIONAL { ?resource dcterms:creator ?creator }
   OPTIONAL { ?resource dcterms:type ?type }
-}`,
+} LIMIT 10`,
         },
         {
           name: "PDF Documents",
           key: "pdf",
           query: `PREFIX dcterms: <http://purl.org/dc/terms/>
 PREFIX edu: <http://example.org/education/>
+PREFIX sim: <http://example.org/similarity/>
 
-SELECT ?resource ?title ?creator ?type ?format WHERE {
-  ?resource a edu:LearningResource ;
-            dcterms:title ?title ;
+SELECT ?resource ?title ?creator ?type ?format ?similarCount WHERE {
+  # Get PDF documents first (smaller result set)
+  {
+    SELECT DISTINCT ?resource WHERE {
+      ?resource a edu:LearningResource ;
+                dcterms:format ?format .
+      FILTER(?format = "pdf" || ?format = "application/pdf")
+    }
+    LIMIT 20  # Pre-limit to make similarity counting faster
+  }
+  
+  # Get metadata for these PDFs
+  ?resource dcterms:title ?title ;
             dcterms:format ?format .
-  FILTER(?format = "pdf" || ?format = "application/pdf")
   OPTIONAL { ?resource dcterms:creator ?creator }
   OPTIONAL { ?resource dcterms:type ?type }
-} LIMIT 50`,
+  
+  # Count similarities efficiently with COALESCE for zero handling
+  OPTIONAL {
+    SELECT ?resource (COUNT(DISTINCT ?related) as ?count) WHERE {
+      {
+        ?rel a sim:SimilarityRelation ;
+             sim:source ?resource ;
+             sim:target ?related .
+      }
+      UNION
+      {
+        ?rel a sim:SimilarityRelation ;
+             sim:source ?related ;
+             sim:target ?resource .
+      }
+    }
+    GROUP BY ?resource
+  }
+  
+  BIND(COALESCE(?count, 0) as ?similarCount)
+}
+ORDER BY DESC(?similarCount) ?title
+LIMIT 10`,
         },
         {
           name: "Physics & Engineering",
@@ -208,7 +241,7 @@ SELECT ?resource ?title ?creator ?type ?subject WHERE {
          CONTAINS(LCASE(STR(?title)), "physik"))
   OPTIONAL { ?resource dcterms:creator ?creator }
   OPTIONAL { ?resource dcterms:type ?type }
-}`,
+} LIMIT 10`,
         },
         {
           name: "Office Documents (Word, PowerPoint, Excel)",
@@ -225,7 +258,7 @@ SELECT ?resource ?title ?creator ?type ?format WHERE {
          ?format = "application/vnd.openxmlformats-officedocument.presentationml.presentation")
   OPTIONAL { ?resource dcterms:creator ?creator }
   OPTIONAL { ?resource dcterms:type ?type }
-} LIMIT 30`,
+} LIMIT 10`,
         },
         {
           name: "Resources by Specific Publishers",
@@ -239,7 +272,7 @@ SELECT ?resource ?title ?creator ?publisher ?type WHERE {
             dcterms:publisher ?publisher .
   OPTIONAL { ?resource dcterms:creator ?creator }
   OPTIONAL { ?resource dcterms:type ?type }
-} LIMIT 50`,
+} LIMIT 10`,
         },
         {
           name: "TU Dresden Resources",
@@ -255,7 +288,7 @@ SELECT ?resource ?title ?creator ?publisher ?subject WHERE {
          CONTAINS(LCASE(STR(?publisher)), "tu_dresden"))
   OPTIONAL { ?resource dcterms:creator ?creator }
   OPTIONAL { ?resource dcterms:subject ?subject }
-}`,
+} LIMIT 10`,
         },
         {
           name: "Chemistry & Biology",
@@ -274,7 +307,7 @@ SELECT ?resource ?title ?creator ?type ?subject WHERE {
          CONTAINS(LCASE(STR(?subject)), "photosynthese"))
   OPTIONAL { ?resource dcterms:creator ?creator }
   OPTIONAL { ?resource dcterms:type ?type }
-}`,
+} LIMIT 10`,
         },
         {
           name: "Lecture Materials & Tutorials",
@@ -291,7 +324,7 @@ SELECT ?resource ?title ?creator ?type ?subject WHERE {
          CONTAINS(LCASE(STR(?type)), "skript"))
   OPTIONAL { ?resource dcterms:creator ?creator }
   OPTIONAL { ?resource dcterms:subject ?subject }
-} LIMIT 50`,
+} LIMIT 10`,
         },
         {
           name: "Find Resources Similar to a Given One",
@@ -300,15 +333,21 @@ SELECT ?resource ?title ?creator ?type ?subject WHERE {
 PREFIX edu: <http://example.org/education/>
 PREFIX sim: <http://example.org/similarity/>
 
-SELECT ?resource ?title ?similar1 ?title1 ?similar2 ?title2 WHERE {
+SELECT ?resource ?title ?similar1 ?title1 ?score1 WHERE {
+  # Simplified: Only show direct similarities, not two-hop
+  ?relation1 a sim:SimilarityRelation ;
+             sim:source ?resource ;
+             sim:target ?similar1 ;
+             sim:score ?score1 .
   ?resource a edu:LearningResource ;
-            dcterms:title ?title ;
-            sim:similarTo ?similar1 .
-  ?similar1 dcterms:title ?title1 ;
-            sim:similarTo ?similar2 .
-  ?similar2 dcterms:title ?title2 .
-  FILTER(?resource != ?similar2)
-} LIMIT 30`,
+            dcterms:title ?title .
+  ?similar1 dcterms:title ?title1 .
+  
+  # Filter for high-quality similarities only
+  FILTER(?score1 > 0.7)
+} 
+ORDER BY DESC(?score1)
+LIMIT 10`,
         },
         {
           name: "Resources with Rich Descriptions",
@@ -325,7 +364,7 @@ SELECT ?resource ?title ?creator ?description (GROUP_CONCAT(DISTINCT ?subject; s
   OPTIONAL { ?resource dcterms:subject ?subject }
 }
 GROUP BY ?resource ?title ?creator ?description
-LIMIT 40`,
+LIMIT 10`,
         },
         {
           name: "Machine Learning & AI Resources",
@@ -353,11 +392,15 @@ SELECT ?resource ?title ?creator ?type ?subject WHERE {
 PREFIX edu: <http://example.org/education/>
 PREFIX sim: <http://example.org/similarity/>
 PREFIX oer: <http://example.org/oer/>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
 
-SELECT ?resource ?title ?creator ?type ?subject WHERE {
+SELECT ?resource ?title ?creator ?type ?subject ?score WHERE {
   {
-    # Find resources that the given ID is similar to
-    oer:YOUR_ID_HERE sim:similarTo ?resource .
+    # Find resources where the given ID is the source
+    ?relation a sim:SimilarityRelation ;
+              sim:source oer:YOUR_ID_HERE ;
+              sim:target ?resource ;
+              sim:score ?score .
     ?resource dcterms:title ?title .
     OPTIONAL { ?resource dcterms:creator ?creator }
     OPTIONAL { ?resource dcterms:type ?type }
@@ -365,9 +408,12 @@ SELECT ?resource ?title ?creator ?type ?subject WHERE {
   }
   UNION
   {
-    # Also find resources that point to the given ID as similar
-    ?resource sim:similarTo oer:YOUR_ID_HERE ;
-              dcterms:title ?title .
+    # Find resources where the given ID is the target
+    ?relation a sim:SimilarityRelation ;
+              sim:source ?resource ;
+              sim:target oer:YOUR_ID_HERE ;
+              sim:score ?score .
+    ?resource dcterms:title ?title .
     OPTIONAL { ?resource dcterms:creator ?creator }
     OPTIONAL { ?resource dcterms:type ?type }
     OPTIONAL { ?resource dcterms:subject ?subject }
@@ -376,12 +422,15 @@ SELECT ?resource ?title ?creator ?type ?subject WHERE {
   {
     # Include the original resource itself
     BIND(oer:YOUR_ID_HERE as ?resource)
+    BIND("1.0"^^xsd:decimal as ?score)
     ?resource dcterms:title ?title .
     OPTIONAL { ?resource dcterms:creator ?creator }
     OPTIONAL { ?resource dcterms:type ?type }
     OPTIONAL { ?resource dcterms:subject ?subject }
   }
-} LIMIT 100`,
+}
+ORDER BY DESC(?score)
+LIMIT 10`,
         },
         {
           name: "Two-Hop Similarity Network from ID",
@@ -389,71 +438,115 @@ SELECT ?resource ?title ?creator ?type ?subject WHERE {
           query: `PREFIX dcterms: <http://purl.org/dc/terms/>
 PREFIX edu: <http://example.org/education/>
 PREFIX sim: <http://example.org/similarity/>
-PREFIX oer: <http://example.org/education/resource/>
+PREFIX oer: <http://example.org/oer/>
 
-SELECT DISTINCT ?resource ?title ?creator ?distance WHERE {
+SELECT DISTINCT ?resource ?title ?creator ?distance ?score WHERE {
+  # Optimized: Start with direct similarities first (faster)
   {
-    # Direct similarity (distance 1)
-    oer:YOUR_ID_HERE sim:similarTo ?resource .
+    # Direct similarity (distance 1) - both directions
+    {
+      ?relation a sim:SimilarityRelation ;
+                sim:source oer:YOUR_ID_HERE ;
+                sim:target ?resource ;
+                sim:score ?score .
+    }
+    UNION
+    {
+      ?relation a sim:SimilarityRelation ;
+                sim:source ?resource ;
+                sim:target oer:YOUR_ID_HERE ;
+                sim:score ?score .
+    }
     ?resource dcterms:title ?title .
     BIND("1" as ?distance)
   }
   UNION
   {
-    # Reverse direct similarity (distance 1)
-    ?resource sim:similarTo oer:YOUR_ID_HERE ;
-              dcterms:title ?title .
-    BIND("1" as ?distance)
-  }
-  UNION
-  {
-    # Two-hop similarity (distance 2)
-    oer:YOUR_ID_HERE sim:similarTo ?intermediate .
-    ?intermediate sim:similarTo ?resource .
+    # Two-hop: Only high-score intermediate connections (optimized)
+    ?relation1 a sim:SimilarityRelation ;
+               sim:source oer:YOUR_ID_HERE ;
+               sim:target ?intermediate ;
+               sim:score ?score1 .
+    FILTER(?score1 > 0.8)  # Pre-filter for quality
+    
+    ?relation2 a sim:SimilarityRelation ;
+               sim:source ?intermediate ;
+               sim:target ?resource ;
+               sim:score ?score .
+    FILTER(?score > 0.7)   # Pre-filter for quality
+    
     ?resource dcterms:title ?title .
     FILTER(?resource != oer:YOUR_ID_HERE)
     BIND("2" as ?distance)
   }
-  UNION
-  {
-    # Two-hop similarity reverse (distance 2)
-    ?intermediate sim:similarTo oer:YOUR_ID_HERE .
-    ?resource sim:similarTo ?intermediate ;
-              dcterms:title ?title .
-    FILTER(?resource != oer:YOUR_ID_HERE)
-    BIND("2" as ?distance)
-  }
+  
   OPTIONAL { ?resource dcterms:creator ?creator }
-} ORDER BY ?distance LIMIT 100`,
+} 
+ORDER BY ?distance DESC(?score) 
+LIMIT 50`,
         },
         {
           name: "Similarity by Subject Overlap",
           key: "subject_similarity",
           query: `PREFIX dcterms: <http://purl.org/dc/terms/>
 PREFIX edu: <http://example.org/education/>
-PREFIX oer: <http://example.org/education/resource/>
+PREFIX oer: <http://example.org/oer/>
 
-SELECT ?resource ?title ?creator ?sharedSubjects (COUNT(?sharedSubject) as ?subjectOverlap) WHERE {
-  # Replace 'YOUR_ID_HERE' with the actual resource ID
+SELECT ?resource ?title ?creator (COUNT(?sharedSubject) as ?subjectOverlap) WHERE {
+  # Optimized: Direct count without nested GROUP_CONCAT
   oer:YOUR_ID_HERE dcterms:subject ?sharedSubject .
   ?resource dcterms:subject ?sharedSubject ;
             dcterms:title ?title .
   FILTER(?resource != oer:YOUR_ID_HERE)
   OPTIONAL { ?resource dcterms:creator ?creator }
-  
-  # Count how many subjects they have in common
+}
+GROUP BY ?resource ?title ?creator
+HAVING(COUNT(?sharedSubject) >= 2)  # Reduced threshold for faster results
+ORDER BY DESC(?subjectOverlap) 
+LIMIT 30`,
+        },
+        {
+          name: "Resources with Most Similar Connections",
+          key: "similarity_count",
+          query: `PREFIX dcterms: <http://purl.org/dc/terms/>
+PREFIX edu: <http://example.org/education/>
+PREFIX sim: <http://example.org/similarity/>
+
+SELECT ?resource ?title ?creator ?similarCount WHERE {
+  # Pre-filter to learning resources first
   {
-    SELECT ?resource (GROUP_CONCAT(?sharedSubject; separator=", ") as ?sharedSubjects) WHERE {
-      oer:YOUR_ID_HERE dcterms:subject ?sharedSubject .
-      ?resource dcterms:subject ?sharedSubject .
-      FILTER(?resource != oer:YOUR_ID_HERE)
+    SELECT ?resource (COUNT(DISTINCT ?related) as ?similarCount) WHERE {
+      ?resource a edu:LearningResource .
+      
+      # Count similarities efficiently with early limiting
+      {
+        SELECT DISTINCT ?resource ?related WHERE {
+          {
+            ?relation a sim:SimilarityRelation ;
+                      sim:source ?resource ;
+                      sim:target ?related .
+          }
+          UNION
+          {
+            ?relation a sim:SimilarityRelation ;
+                      sim:source ?related ;
+                      sim:target ?resource .
+          }
+        }
+        LIMIT 1000  # Pre-limit similarity relations to check
+      }
     }
     GROUP BY ?resource
+    ORDER BY DESC(?similarCount)
+    LIMIT 20  # Pre-select top candidates
   }
+  
+  # Get metadata for selected resources
+  ?resource dcterms:title ?title .
+  OPTIONAL { ?resource dcterms:creator ?creator }
 }
-GROUP BY ?resource ?title ?creator ?sharedSubjects
-HAVING(COUNT(?sharedSubject) >= 3)  # Minimum 3 shared subjects as threshold
-ORDER BY DESC(?subjectOverlap) LIMIT 50`,
+ORDER BY DESC(?similarCount)
+LIMIT 10`,
         },
       ],
 
@@ -1019,12 +1112,22 @@ ORDER BY DESC(?subjectOverlap) LIMIT 50`,
 
       console.log("Executing custom SPARQL query");
 
+      // Create new AbortController for this query
+      this.sparqlFilters.abortController = new AbortController();
       this.sparqlFilters.loading = true;
       this.sparqlFilters.error = null; // Clear previous errors
 
       try {
-        // Execute the custom SPARQL query
-        const results = await sparqlEngine.executeSelectQuery(this.customSparqlQuery);
+        // Execute the custom SPARQL query with abort signal
+        const results = await Promise.race([
+          sparqlEngine.executeSelectQuery(this.customSparqlQuery),
+          new Promise((_, reject) => {
+            this.sparqlFilters.abortController?.signal.addEventListener("abort", () => {
+              reject(new Error("Query execution was cancelled by user"));
+            });
+          }),
+        ]);
+
         console.log("Custom SPARQL results:", results);
 
         if (results && results.length > 0) {
@@ -1105,6 +1208,18 @@ ORDER BY DESC(?subjectOverlap) LIMIT 50`,
         this.sparqlFilters.error = `SPARQL Query Error: ${errorMessage}`;
       } finally {
         this.sparqlFilters.loading = false;
+        this.sparqlFilters.abortController = null; // Clean up abort controller
+      }
+    },
+
+    // Stop the currently running SPARQL query
+    stopSparqlQuery() {
+      if (this.sparqlFilters.abortController) {
+        console.log("Stopping SPARQL query execution");
+        this.sparqlFilters.abortController.abort();
+        this.sparqlFilters.abortController = null;
+        this.sparqlFilters.loading = false;
+        this.sparqlFilters.error = "Query execution was cancelled by user";
       }
     },
 
@@ -1182,6 +1297,107 @@ ORDER BY DESC(?subjectOverlap) LIMIT 50`,
 
       Graph.resumeAnimation();
     },
+
+    // Copy ID to clipboard method
+    async copyIdToClipboard(id: string, event?: Event) {
+      if (event) {
+        event.stopPropagation(); // Prevent card click event
+      }
+
+      try {
+        await navigator.clipboard.writeText(id);
+        console.log(`Copied ID to clipboard: ${id}`);
+
+        // You could add a toast notification here if desired
+        // For now, we'll just log to console
+      } catch (error) {
+        console.error("Failed to copy ID to clipboard:", error);
+
+        // Fallback for older browsers
+        try {
+          const textArea = document.createElement("textarea");
+          textArea.value = id;
+          document.body.appendChild(textArea);
+          textArea.select();
+          document.execCommand("copy");
+          document.body.removeChild(textArea);
+          console.log(`Copied ID to clipboard (fallback): ${id}`);
+        } catch (fallbackError) {
+          console.error("Fallback copy method also failed:", fallbackError);
+        }
+      }
+    },
+
+    // Helper methods for generic SPARQL field display
+    getAdditionalSparqlFields(sparqlData: any) {
+      if (!sparqlData) return {};
+
+      // Define standard fields that are already displayed elsewhere
+      const standardFields = new Set([
+        "resource",
+        "title",
+        "creator",
+        "type",
+        "format",
+        "subject",
+        "subjects",
+        "description",
+        "publisher",
+        "affiliation",
+        "authors",
+        "tag",
+        "summary",
+        "file",
+        "id",
+        "originalId",
+      ]);
+
+      const additionalFields: Record<string, any> = {};
+
+      // Extract additional fields from SPARQL data
+      Object.keys(sparqlData).forEach((key) => {
+        if (!standardFields.has(key) && sparqlData[key]?.value !== undefined) {
+          additionalFields[key] = sparqlData[key].value;
+        }
+      });
+
+      return additionalFields;
+    },
+
+    formatFieldName(fieldName: string) {
+      // Convert camelCase or snake_case to readable format
+      return fieldName
+        .replace(/([A-Z])/g, " $1") // Add space before uppercase
+        .replace(/_/g, " ") // Replace underscores with spaces
+        .replace(/\b\w/g, (l) => l.toUpperCase()) // Capitalize first letter of each word
+        .trim();
+    },
+
+    formatFieldValue(value: any) {
+      if (value === null || value === undefined) return "N/A";
+
+      // Handle different value types
+      if (typeof value === "number") {
+        // Format numbers with appropriate precision
+        if (value % 1 === 0) return value.toString();
+        return Number(value).toFixed(3);
+      }
+
+      if (typeof value === "boolean") {
+        return value ? "Yes" : "No";
+      }
+
+      // Handle URIs - extract just the local name
+      if (typeof value === "string" && value.includes("/")) {
+        const parts = value.split("/");
+        const lastPart = parts[parts.length - 1];
+        if (lastPart && lastPart !== value) {
+          return lastPart;
+        }
+      }
+
+      return String(value);
+    },
   },
 
   computed: {
@@ -1195,12 +1411,10 @@ ORDER BY DESC(?subjectOverlap) LIMIT 50`,
       if (this.sparqlFilters.active && this.sparqlFilters.data.length > 0) {
         // Convert SPARQL data to display format for the list
         return this.sparqlFilters.data.map((item, index) => ({
-          id: `sparql_${index}_${
-            item.resource?.value?.split("/").pop() || item.id || "unknown"
-          }`,
-          title: item.title?.value || "Untitled",
-          type: item.type?.value?.split("/").pop() || "Unknown",
-          file: item.format?.value || "unknown",
+          id: `sparql_${index}_${item.resource?.value?.split("/").pop() || item.id}`,
+          title: item.title?.value,
+          type: item.type?.value?.split("/").pop(),
+          file: item.format?.value,
           affiliation: item.creator?.value?.split("/").pop() || "",
           summary:
             item.description?.value ||
@@ -1215,7 +1429,7 @@ ORDER BY DESC(?subjectOverlap) LIMIT 50`,
                 .filter(Boolean)
             : item.subject?.value
             ? [item.subject.value.split("/").pop()]
-            : ["Unknown"],
+            : [],
           sparqlData: item,
           originalId: item.resource?.value?.split("/").pop() || item.id,
         }));
@@ -1359,7 +1573,15 @@ ORDER BY DESC(?subjectOverlap) LIMIT 50`,
               />
               <v-card-item style="margin-top: 1rem">
                 <div class="d-flex justify-space-between align-start mb-2">
-                  <v-card-title class="no-ellipsis pa-0">
+                  <v-card-title
+                    class="no-ellipsis pa-0"
+                    style="
+                      flex: 1;
+                      min-width: 0;
+                      word-break: break-word;
+                      line-height: 1.2;
+                    "
+                  >
                     {{ article.content?.title }}
                   </v-card-title>
                   <v-chip
@@ -1367,7 +1589,16 @@ ORDER BY DESC(?subjectOverlap) LIMIT 50`,
                     color="primary"
                     variant="outlined"
                     class="ml-2"
-                    style="font-family: monospace; flex-shrink: 0"
+                    style="font-family: monospace; flex-shrink: 0; cursor: pointer"
+                    @click="
+                      copyIdToClipboard(
+                        searchMode === 'sparql' && article.content?.originalId
+                          ? article.content?.originalId
+                          : article.content?.id,
+                        $event
+                      )
+                    "
+                    title="Click to copy ID"
                   >
                     {{
                       searchMode === "sparql" && article.content?.originalId
@@ -1377,7 +1608,9 @@ ORDER BY DESC(?subjectOverlap) LIMIT 50`,
                   </v-chip>
                 </div>
 
-                <v-card-subtitle>
+                <v-card-subtitle
+                  v-show="article.content?.authors || article.content?.affiliation"
+                >
                   {{ article.content?.authors }}
 
                   <span v-show="article.content?.authors && article.content?.affiliation"
@@ -1392,11 +1625,34 @@ ORDER BY DESC(?subjectOverlap) LIMIT 50`,
 
               <v-card-text style="max-height: 400px; overflow: auto">
                 {{ article.content?.summary }}
-                <ul>
+                <ul
+                  v-show="article.content?.tag?.length"
+                  class="pa-0 ma-0"
+                  style="list-style: none"
+                >
                   <li v-for="tag in article.content?.tag || []">{{ tag }}</li>
                 </ul>
 
-                Typ: {{ article.content?.type }} / {{ article.content?.file }}
+                <span v-show="article.content?.type || article.content?.file"
+                  >Typ: {{ article.content?.type }} / {{ article.content?.file }}</span
+                >
+
+                <!-- Generic SPARQL fields display -->
+                <div
+                  v-if="searchMode === 'sparql' && article.content?.sparqlData"
+                  class="mt-2"
+                >
+                  <div
+                    v-for="(value, key) in getAdditionalSparqlFields(
+                      article.content.sparqlData
+                    )"
+                    :key="key"
+                    class="mb-1"
+                  >
+                    <strong>{{ formatFieldName(key) }}:</strong>
+                    {{ formatFieldValue(value) }}
+                  </div>
+                </div>
               </v-card-text>
 
               <v-card-actions class="pt-0">
@@ -1500,6 +1756,7 @@ SELECT ?resource ?title ?creator WHERE {
                     <v-btn
                       @click="executeCustomSparqlQuery"
                       :loading="sparqlFilters.loading"
+                      :disabled="sparqlFilters.loading"
                       color="accent"
                       variant="elevated"
                       size="small"
@@ -1509,7 +1766,19 @@ SELECT ?resource ?title ?creator WHERE {
                     </v-btn>
 
                     <v-btn
-                      v-if="sparqlFilters.active"
+                      v-if="sparqlFilters.loading"
+                      @click="stopSparqlQuery"
+                      color="warning"
+                      variant="elevated"
+                      size="small"
+                      prepend-icon="mdi-stop"
+                      class="ml-2"
+                    >
+                      Stop Query
+                    </v-btn>
+
+                    <v-btn
+                      v-if="sparqlFilters.active && !sparqlFilters.loading"
                       @click="clearSparqlFilters"
                       color="error"
                       variant="outlined"
@@ -1571,7 +1840,15 @@ SELECT ?resource ?title ?creator WHERE {
                   >
                     <v-card-item style="margin-top: 1rem">
                       <div class="d-flex justify-space-between align-start mb-2">
-                        <v-card-title class="no-ellipsis pa-0">
+                        <v-card-title
+                          class="no-ellipsis pa-0"
+                          style="
+                            flex: 1;
+                            min-width: 0;
+                            word-break: break-word;
+                            line-height: 1.2;
+                          "
+                        >
                           {{ item.title }}
                         </v-card-title>
                         <v-chip
@@ -1579,7 +1856,16 @@ SELECT ?resource ?title ?creator WHERE {
                           color="primary"
                           variant="outlined"
                           class="ml-2"
-                          style="font-family: monospace; flex-shrink: 0"
+                          style="font-family: monospace; flex-shrink: 0; cursor: pointer"
+                          @click="
+                            copyIdToClipboard(
+                              searchMode === 'sparql' && item.originalId
+                                ? item.originalId
+                                : item.id,
+                              $event
+                            )
+                          "
+                          title="Click to copy ID"
                         >
                           {{
                             searchMode === "sparql" && item.originalId
@@ -1602,11 +1888,31 @@ SELECT ?resource ?title ?creator WHERE {
 
                     <v-card-text>
                       {{ item.summary }}
-                      <ul>
+                      <ul
+                        v-show="item.tag?.length"
+                        class="pa-0 ma-0"
+                        style="list-style: none"
+                      >
                         <li v-for="tag in item.tag || []">{{ tag }}</li>
                       </ul>
 
-                      Typ: {{ item.type }} / {{ item.file }}
+                      <span v-show="item.type || item.file"
+                        >Typ: {{ item.type }} / {{ item.file }}</span
+                      >
+
+                      <!-- Generic SPARQL fields display -->
+                      <div v-if="searchMode === 'sparql' && item.sparqlData" class="mt-2">
+                        <div
+                          v-for="(value, key) in getAdditionalSparqlFields(
+                            item.sparqlData
+                          )"
+                          :key="key"
+                          class="mb-1"
+                        >
+                          <strong>{{ formatFieldName(key) }}:</strong>
+                          {{ formatFieldValue(value) }}
+                        </div>
+                      </div>
                     </v-card-text>
 
                     <v-card-actions class="pt-0">
