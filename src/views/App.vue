@@ -2,7 +2,7 @@
 import { Splitpanes, Pane } from "splitpanes";
 import "splitpanes/dist/splitpanes.css";
 
-//import { VRButton } from "../../node_modules/three/examples/jsm/webxr/VRButton.js";
+import { VRButton } from "../../node_modules/three/examples/jsm/webxr/VRButton.js";
 //import ForceGraph3D from "3d-force-graph";
 import { includes, resetNodePositions, stringToColor, getOrientation } from "../utils";
 import {
@@ -181,6 +181,16 @@ export default {
           // Enable WebXR
           const renderer = Graph.renderer();
           renderer.xr.enabled = true;
+
+          if ((navigator as any).xr && (navigator as any).xr.isSessionSupported) {
+            (navigator as any).xr
+              .isSessionSupported("immersive-vr")
+              .then((supported: boolean) => {
+                if (supported) {
+                  this.$refs.graph.appendChild(VRButton.createButton(renderer));
+                }
+              });
+          }
 
           Graph.pauseAnimation();
           //Graph.d3Force("charge").strength(-500);
