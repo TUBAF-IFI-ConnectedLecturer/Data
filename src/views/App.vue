@@ -6,7 +6,16 @@ import { sparqlEngine } from "../utils/sparqlEngine";
 
 import { VRButton } from "../../node_modules/three/examples/jsm/webxr/VRButton.js";
 //import ForceGraph3D from "3d-force-graph";
-import { includes, resetNodePositions, stringToColor, getOrientation } from "../utils";
+import {
+  includes,
+  resetNodePositions,
+  stringToColor,
+  getOrientation,
+  updateUrlParams,
+  parseUrlParams,
+  encodeSparqlForUrl,
+  decodeSparqlFromUrl,
+} from "../utils";
 import {
   CSS2DRenderer,
   CSS2DObject,
@@ -83,7 +92,7 @@ export default {
       customSparqlQuery: "",
 
       // Search mode: 'normal' or 'sparql'
-      searchMode: "normal",
+      searchMode: "normal" as "normal" | "sparql",
 
       // Separate active ID for SPARQL mode to avoid conflicts
       activeSparqlId: null as string | null,
@@ -565,11 +574,13 @@ LIMIT 10`,
       if (!database || !Graph) return;
 
       const rawTerm = this.search.text.trim(); // keep user casing*
-      const url = new URL(window.location.href);
-      rawTerm
-        ? url.searchParams.set("search", rawTerm)
-        : url.searchParams.delete("search");
-      history.replaceState({}, "", url); // no page reload
+
+      // Update URL parameters for search
+      updateUrlParams({
+        mode: "normal",
+        search: rawTerm || null,
+        id: null, // Clear ID when performing new search
+      });
 
       const term = rawTerm.toLowerCase();
 
@@ -735,30 +746,94 @@ LIMIT 10`,
           Graph.pauseAnimation();
           //Graph.d3Force("charge").strength(-500);
 
-          const params = new URLSearchParams(window.location.search);
-          const initialSearch = params.get("search");
-          const initialTitle = params.get("title");
-          const initialView = params.get("view");
-          const initialId = params.get("id");
+          // Parse URL parameters to determine initial state
+          const urlParams = parseUrlParams();
 
-          if (initialView) {
-            this.split = initialView;
+          // Set initial mode from URL or default to normal
+          this.searchMode = urlParams.mode || "normal";
+
+          // Handle initial view parameter
+          if (urlParams.view) {
+            this.split = urlParams.view;
           }
 
           setTimeout(function () {
-            if (initialTitle) {
+            // Handle title parameter
+            if (urlParams.title) {
               self.toggleTitle();
             }
 
-            if (initialSearch) {
-              self.search.text = initialSearch; // pre‑fill the field
-              self.handleSearch(); // execute the search
+            // Handle mode-specific initialization
+            if (urlParams.mode === "sparql") {
+              // SPARQL mode initialization
+              if (urlParams.sparqlQuery) {
+                self.customSparqlQuery = urlParams.sparqlQuery;
+              }
 
-              if (initialId) {
+              if (urlParams.sparqlPreset) {
+                self.selectedPresetQuery = urlParams.sparqlPreset;
+                // Load the preset query if available
+                const presetQuery = self.sparqlQueries.find(
+                  (q) => q.key === urlParams.sparqlPreset
+                );
+                if (presetQuery && !urlParams.sparqlQuery) {
+                  self.customSparqlQuery = presetQuery.query;
+                }
+              }
+
+              // Execute the SPARQL query if present
+              if (self.customSparqlQuery) {
+                self.executeCustomSparqlQuery().then(() => {
+                  // Handle ID selection after SPARQL results are loaded
+                  if (urlParams.id) {
+                    setTimeout(() => {
+                      // Find node in SPARQL results
+                      const sparqlItem = self.sparqlFilters.data.find((item: any) => {
+                        const originalId =
+                          item.resource?.value?.split("/").pop() || item.id;
+                        return originalId === urlParams.id;
+                      });
+
+                      if (sparqlItem) {
+                        const visibleItem = self.visibleNodes.find(
+                          (item: any) => item.originalId === urlParams.id
+                        );
+                        if (visibleItem) {
+                          self.showArticle(visibleItem, true);
+                        }
+                      }
+                    }, 1000);
+                  }
+                });
+              }
+            } else {
+              // Normal mode initialization
+              if (urlParams.search) {
+                self.search.text = urlParams.search; // pre‑fill the field
+                self.handleSearch(); // execute the search
+
+                if (urlParams.id) {
+                  setTimeout(function () {
+                    const node = Graph.graphData().nodes.find(
+                      (n: any) => n.id === urlParams.id
+                    );
+                    if (node) {
+                      self.showArticle(node, true);
+                    }
+                  }, 1000);
+                }
+              } else if (urlParams.id) {
+                // If only ID is provided, we need to find and highlight the node
+                // This might require loading connections or showing the full graph
                 setTimeout(function () {
-                  const node = Graph.graphData().nodes.find((n) => n.id === initialId);
+                  // Show full graph first to find the node
+                  Graph.graphData(database).d3ReheatSimulation();
+                  self.updateCounters(database);
 
-                  self.showArticle(node, true);
+                  const node = database.nodes.find((n: Node) => n.id === urlParams.id);
+                  if (node) {
+                    self.showArticle(node, true);
+                  }
                 }, 1000);
               }
             }
@@ -786,32 +861,40 @@ LIMIT 10`,
     handleSplitChange(kind: "graph" | "both" | "list") {
       this.split = kind;
 
-      const url = new URL(window.location.href);
-
-      switch (kind) {
-        case "graph": {
-          url.searchParams.set("view", "graph");
-          break;
-        }
-        case "list": {
-          url.searchParams.set("view", "list");
-          break;
-        }
-        default: {
-          url.searchParams.delete("view");
-        }
-      }
-      history.replaceState({}, "", url);
+      // Update URL parameters, preserving current state
+      updateUrlParams({
+        mode: this.searchMode,
+        search: this.searchMode === "normal" ? this.search.text || undefined : undefined,
+        sparqlQuery:
+          this.searchMode === "sparql" ? this.customSparqlQuery || undefined : undefined,
+        sparqlPreset:
+          this.searchMode === "sparql"
+            ? this.selectedPresetQuery || undefined
+            : undefined,
+        view: kind === "both" ? null : kind,
+      });
     },
 
     showArticle(node?: Node, scroll = false) {
-      const url = new URL(window.location.href);
-
       if (!node) {
         this.activeId = null;
         this.activeSparqlId = null;
-        url.searchParams.delete("id");
-        history.replaceState({}, "", url);
+
+        // Update URL to clear ID parameter, but preserve other parameters
+        updateUrlParams({
+          mode: this.searchMode,
+          search:
+            this.searchMode === "normal" ? this.search.text || undefined : undefined,
+          sparqlQuery:
+            this.searchMode === "sparql"
+              ? this.customSparqlQuery || undefined
+              : undefined,
+          sparqlPreset:
+            this.searchMode === "sparql"
+              ? this.selectedPresetQuery || undefined
+              : undefined,
+          id: null,
+        });
 
         // Refresh graph to remove glowing effect
         Graph.refresh();
@@ -861,8 +944,13 @@ LIMIT 10`,
               }
             }
 
-            url.searchParams.set("id", node.id);
-            history.replaceState({}, "", url);
+            // Update URL with original ID, preserving SPARQL query and preset
+            updateUrlParams({
+              mode: this.searchMode,
+              sparqlQuery: this.customSparqlQuery || undefined,
+              sparqlPreset: this.selectedPresetQuery || undefined,
+              id: node.id,
+            });
             return;
           }
         }
@@ -909,18 +997,33 @@ LIMIT 10`,
           }
         }
 
-        // Set URL to the original ID if available
+        // Set URL to the original ID if available, preserving SPARQL query and preset
         const urlId = (node as any).originalId || node.id;
-        url.searchParams.set("id", urlId);
-        history.replaceState({}, "", url);
+        updateUrlParams({
+          mode: this.searchMode,
+          sparqlQuery: this.customSparqlQuery || undefined,
+          sparqlPreset: this.selectedPresetQuery || undefined,
+          id: urlId,
+        });
         return;
       }
 
       // Normal mode handling
       this.activeId = node.id;
       this.activeSparqlId = null; // Clear SPARQL mode active ID
-      url.searchParams.set("id", this.activeId);
-      history.replaceState({}, "", url);
+
+      // Update URL with the selected ID, preserving current mode parameters
+      updateUrlParams({
+        mode: this.searchMode,
+        search: this.searchMode === "normal" ? this.search.text || undefined : undefined,
+        sparqlQuery:
+          this.searchMode === "sparql" ? this.customSparqlQuery || undefined : undefined,
+        sparqlPreset:
+          this.searchMode === "sparql"
+            ? this.selectedPresetQuery || undefined
+            : undefined,
+        id: this.activeId,
+      });
 
       const config = Graph.graphData();
 
@@ -1035,13 +1138,18 @@ LIMIT 10`,
       Graph.pauseAnimation();
       this.settings.title = !this.settings.title;
 
-      const url = new URL(window.location.href);
-      if (this.settings.title) {
-        url.searchParams.set("title", "1");
-      } else {
-        url.searchParams.delete("title");
-      }
-      history.replaceState({}, "", url);
+      // Update URL parameters, preserving current state
+      updateUrlParams({
+        mode: this.searchMode,
+        search: this.searchMode === "normal" ? this.search.text || undefined : undefined,
+        sparqlQuery:
+          this.searchMode === "sparql" ? this.customSparqlQuery || undefined : undefined,
+        sparqlPreset:
+          this.searchMode === "sparql"
+            ? this.selectedPresetQuery || undefined
+            : undefined,
+        title: this.settings.title ? "1" : null,
+      });
 
       Graph.refresh();
       Graph.resumeAnimation();
@@ -1058,12 +1166,27 @@ LIMIT 10`,
       // Set the selected preset by key
       this.selectedPresetQuery = queryConfig.key;
 
+      // Update URL parameters
+      updateUrlParams({
+        mode: "sparql",
+        sparqlQuery: queryConfig.query,
+        sparqlPreset: queryConfig.key,
+      });
+
       // Execute the query
       await this.executeCustomSparqlQuery();
     },
 
     clearSparqlFilters() {
       console.log("Clearing SPARQL filters");
+
+      // Update URL parameters to remove SPARQL-specific params
+      updateUrlParams({
+        mode: "sparql",
+        sparqlQuery: null,
+        sparqlPreset: null,
+        id: null,
+      });
 
       // Show empty graph instead of all data
       const emptyGraphData = { nodes: [], links: [] };
@@ -1111,6 +1234,13 @@ LIMIT 10`,
       }
 
       console.log("Executing custom SPARQL query");
+
+      // Update URL parameters before executing query
+      updateUrlParams({
+        mode: "sparql",
+        sparqlQuery: this.customSparqlQuery,
+        sparqlPreset: this.selectedPresetQuery,
+      });
 
       // Create new AbortController for this query
       this.sparqlFilters.abortController = new AbortController();
@@ -1441,6 +1571,14 @@ LIMIT 10`,
 
   watch: {
     searchMode(newMode, oldMode) {
+      // Update URL when search mode changes
+      updateUrlParams({
+        mode: newMode,
+        search: newMode === "normal" ? this.search.text : null,
+        sparqlQuery: newMode === "sparql" ? this.customSparqlQuery : null,
+        sparqlPreset: newMode === "sparql" ? this.selectedPresetQuery : null,
+      });
+
       // Clear SPARQL filters when switching to normal search mode
       if (newMode === "normal" && oldMode === "sparql" && this.sparqlFilters.active) {
         this.clearSparqlFilters();

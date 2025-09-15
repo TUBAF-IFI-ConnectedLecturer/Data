@@ -50,7 +50,7 @@ function hslToHex(h: number, s: number, l: number): string {
   return `#${f(0)}${f(8)}${f(4)}`
 }
 
-export function resetNodePositions(nodes) {
+export function resetNodePositions(nodes: any[]): any[] {
   return nodes.map(({ x, y, z, vx, vy, vz, fx, fy, fz, ...rest }) => ({
     ...rest,
     x: undefined,
@@ -79,4 +79,120 @@ export function includes(base: string, term: string) {
 export function getOrientation() {
   // fall back to innerWidth / innerHeight
   return window.innerWidth > window.innerHeight ? 'horizontal' : 'vertical'
+}
+
+/**
+ * URL parameter handling utilities for SPARQL queries and app state
+ */
+
+// Encode SPARQL query for URL
+export function encodeSparqlForUrl(query: string): string {
+  return encodeURIComponent(btoa(query))
+}
+
+// Decode SPARQL query from URL
+export function decodeSparqlFromUrl(encoded: string): string {
+  try {
+    return atob(decodeURIComponent(encoded))
+  } catch (error) {
+    console.warn('Failed to decode SPARQL query from URL:', error)
+    return ''
+  }
+}
+
+// Update URL parameters based on current app state
+export function updateUrlParams(params: {
+  mode?: 'normal' | 'sparql'
+  search?: string | null
+  sparqlQuery?: string | null
+  sparqlPreset?: string | null
+  id?: string | null
+  view?: string | null
+  title?: string | null
+}) {
+  const url = new URL(window.location.href)
+
+  // Handle mode parameter
+  if (params.mode) {
+    url.searchParams.set('mode', params.mode)
+  }
+
+  // Handle search parameters (normal mode)
+  if (params.mode === 'normal' || !params.mode) {
+    if (params.search) {
+      url.searchParams.set('search', params.search)
+    } else {
+      url.searchParams.delete('search')
+    }
+    // Clear SPARQL parameters when in normal mode
+    url.searchParams.delete('sparql')
+    url.searchParams.delete('preset')
+  }
+
+  // Handle SPARQL parameters
+  if (params.mode === 'sparql') {
+    if (params.sparqlQuery) {
+      url.searchParams.set('sparql', encodeSparqlForUrl(params.sparqlQuery))
+    } else {
+      url.searchParams.delete('sparql')
+    }
+
+    if (params.sparqlPreset) {
+      url.searchParams.set('preset', params.sparqlPreset)
+    } else {
+      url.searchParams.delete('preset')
+    }
+
+    // Clear search parameter when in SPARQL mode
+    url.searchParams.delete('search')
+  }
+
+  // Handle common parameters
+  if (params.id) {
+    url.searchParams.set('id', params.id)
+  } else if (params.id === null) {
+    url.searchParams.delete('id')
+  }
+
+  if (params.view) {
+    url.searchParams.set('view', params.view)
+  } else if (params.view === null) {
+    url.searchParams.delete('view')
+  }
+
+  if (params.title) {
+    url.searchParams.set('title', params.title)
+  } else if (params.title === null) {
+    url.searchParams.delete('title')
+  }
+
+  history.replaceState({}, '', url)
+}
+
+// Parse URL parameters and return app state
+export function parseUrlParams() {
+  const params = new URLSearchParams(window.location.search)
+
+  const mode = (params.get('mode') as 'normal' | 'sparql') || 'normal'
+  const search = params.get('search')
+  const encodedSparql = params.get('sparql')
+  const sparqlPreset = params.get('preset')
+  const id = params.get('id')
+  const view = params.get('view')
+  const title = params.get('title')
+
+  let sparqlQuery = ''
+  if (encodedSparql) {
+    sparqlQuery = decodeSparqlFromUrl(encodedSparql)
+  }
+
+  return {
+    mode,
+    search,
+    sparqlQuery,
+    sparqlPreset,
+    id,
+    view,
+    title,
+  }
 }
