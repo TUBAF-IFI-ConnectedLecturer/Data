@@ -32,6 +32,7 @@ type Node = {
   summary: string;
   authors: string;
   tag: string[];
+  license?: string;
 };
 
 type Link = {
@@ -609,7 +610,7 @@ LIMIT 10`,
             includes(
               `${n.title} ${n.affiliation || ""} ${n.summary || ""} ${n.authors || ""} ${
                 n.file
-              } ${n.tag.join(" ")}`,
+              } ${n.tag.join(" ")} ${n.license || ""}`,
               term
             )
           )
