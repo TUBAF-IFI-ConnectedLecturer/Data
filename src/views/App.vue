@@ -1475,6 +1475,7 @@ LIMIT 10`,
         "publisher",
         "affiliation",
         "authors",
+        "license",
         "tag",
         "summary",
         "file",
@@ -1775,6 +1776,10 @@ LIMIT 10`,
                   >Typ: {{ article.content?.type }} / {{ article.content?.file }}</span
                 >
 
+                <div style="display: block" v-show="article.content?.license">
+                  Lizenz: {{ article.content?.license }}
+                </div>
+
                 <!-- Generic SPARQL fields display -->
                 <div
                   v-if="searchMode === 'sparql' && article.content?.sparqlData"
@@ -2026,17 +2031,22 @@ SELECT ?resource ?title ?creator WHERE {
 
                     <v-card-text>
                       {{ item.summary }}
+                      <v-divider class="my-2" />
                       <ul
                         v-show="item.tag?.length"
                         class="pa-0 ma-0"
-                        style="list-style: none"
+                        style="list-style: none; font-size: small"
                       >
                         <li v-for="tag in item.tag || []">{{ tag }}</li>
                       </ul>
 
+                      <v-divider class="my-2" />
+
                       <span v-show="item.type || item.file"
                         >Typ: {{ item.type }} / {{ item.file }}</span
                       >
+
+                      <div v-show="item?.license">Lizenz: {{ item?.license }}</div>
 
                       <!-- Generic SPARQL fields display -->
                       <div v-if="searchMode === 'sparql' && item.sparqlData" class="mt-2">
