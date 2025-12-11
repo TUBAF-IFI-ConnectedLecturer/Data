@@ -69,6 +69,7 @@ export default {
 
       settings: {
         title: false,
+        darkMode: true,
       },
 
       article: {
@@ -764,6 +765,16 @@ LIMIT 10`,
               self.toggleTitle();
             }
 
+            // Handle theme parameter
+            if (urlParams.theme === "light") {
+              self.settings.darkMode = false;
+              self.$vuetify.theme.global.name = "light";
+              const graphElement = self.$refs.graph as HTMLElement;
+              if (graphElement) {
+                graphElement.style.backgroundColor = "white";
+              }
+            }
+
             // Handle mode-specific initialization
             if (urlParams.mode === "sparql") {
               // SPARQL mode initialization
@@ -1150,11 +1161,37 @@ LIMIT 10`,
             ? this.selectedPresetQuery || undefined
             : undefined,
         title: this.settings.title ? "1" : null,
+        theme: this.settings.darkMode ? null : "light",
       });
 
       Graph.refresh();
       Graph.resumeAnimation();
       Graph.d3ReheatSimulation();
+    },
+
+    toggleTheme() {
+      this.settings.darkMode = !this.settings.darkMode;
+      this.$vuetify.theme.global.name = this.settings.darkMode ? "dark" : "light";
+
+      // Update graph background color
+      const graphElement = this.$refs.graph as HTMLElement;
+      if (graphElement) {
+        graphElement.style.backgroundColor = this.settings.darkMode ? "black" : "white";
+      }
+
+      // Update URL parameters
+      updateUrlParams({
+        mode: this.searchMode,
+        search: this.searchMode === "normal" ? this.search.text || undefined : undefined,
+        sparqlQuery:
+          this.searchMode === "sparql" ? this.customSparqlQuery || undefined : undefined,
+        sparqlPreset:
+          this.searchMode === "sparql"
+            ? this.selectedPresetQuery || undefined
+            : undefined,
+        title: this.settings.title ? "1" : null,
+        theme: this.settings.darkMode ? null : "light",
+      });
     },
 
     // SPARQL filtering methods
@@ -1671,6 +1708,15 @@ LIMIT 10`,
                 "
                 @click="toggleTitle"
               />
+              <v-list-item
+                :title="
+                  settings.darkMode ? 'Light Mode aktivieren' : 'Dark Mode aktivieren'
+                "
+                :prepend-icon="
+                  settings.darkMode ? 'mdi-weather-sunny' : 'mdi-weather-night'
+                "
+                @click="toggleTheme"
+              />
               <v-list-item title="Darstellung:" prepend-icon="mdi-information-outline" />
               <v-list-item>
                 <v-radio-group
@@ -2117,6 +2163,20 @@ SELECT ?resource ?title ?creator WHERE {
   width: 100%;
   max-height: calc(100vh - 48px);
   background-color: black;
+}
+
+/* Light mode specific styles */
+.v-theme--light #graph {
+  background-color: white;
+}
+
+.v-theme--light #information {
+  color: black;
+}
+
+.v-theme--light .node-label {
+  background-color: rgba(255, 255, 255, 0.85);
+  color: black;
 }
 
 .info-card {
