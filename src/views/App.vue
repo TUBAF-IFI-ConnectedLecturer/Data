@@ -1865,13 +1865,16 @@ LIMIT 10`,
 
           <pane
             :size="split === 'graph' ? 0 : split === 'both' ? 30 : 100"
-            style="background-color: black"
+            :style="{ backgroundColor: settings.darkMode ? 'black' : 'white' }"
           >
             <!-- SPARQL Query Interface Header -->
             <v-card
               v-if="split !== 'graph' && searchMode === 'sparql'"
               class="ma-2 mb-0"
-              style="background-color: #1e1e1e; border: 1px solid #333"
+              :style="{ 
+                backgroundColor: settings.darkMode ? '#1e1e1e' : '#f5f5f5', 
+                border: settings.darkMode ? '1px solid #333' : '1px solid #ddd' 
+              }"
             >
               <v-card-title class="pb-2">
                 <v-icon color="accent" class="mr-2">mdi-database-search</v-icon>
@@ -1914,7 +1917,10 @@ SELECT ?resource ?title ?creator WHERE {
 } LIMIT 50"
                   rows="8"
                   variant="outlined"
-                  style="font-family: 'Courier New', monospace; background-color: #2d2d2d"
+                  :style="{ 
+                    fontFamily: 'Courier New, monospace', 
+                    backgroundColor: settings.darkMode ? '#2d2d2d' : '#ffffff' 
+                  }"
                   hide-details
                   density="compact"
                 />
